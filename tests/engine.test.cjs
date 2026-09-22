@@ -5,7 +5,7 @@ const C = require('../extension/core.js');
 function harness() {
   let time=1000, seq=0; const tabs=new Map(), sent=[], snapshots=[];
   const io={
-    async create(provider){const id=++seq;tabs.set(id,{ok:true,input:true,inputOccupied:false,busy:false,url:C.providers[provider].url,answers:[]});return id;},
+    async create(provider){const id=++seq;tabs.set(id,{ok:true,input:true,inputOccupied:false,draft:'',busy:false,url:C.providers[provider].url,answers:[]});return id;},
     async snapshot(id){if(!tabs.has(id))throw new Error('页面已关闭');return structuredClone(tabs.get(id));},
     async activate(){}, async cancel(){}, async resume(){},
     async send(id,p){sent.push({id,...p});return {ok:true};}
@@ -63,4 +63,28 @@ test('a stop during preflight cannot dispatch a prompt',async()=>{
   // The preflight may finish reading both pages but must not send either one.
   h.io.snapshot=async id=>structuredClone(h.tabs.get(id));
   await flight;assert.equal(h.sent.length,0);assert.equal(h.e.run.status,'paused');
+});
+test('an exact prompt already in the composer is resumed, while unrelated drafts stay protected',async()=>{
+  const h=harness();await h.e.begin(h.config);await h.e.tick();await answer(h,'初稿');
+  const marker='【接力结束_resume】';
+  const prompt=C.promptFor(h.e.run,'review',marker);
+  h.e.run.pending={taskId:'resume-task',marker,phase:'prepared',started:1000,prompt};
+  const reviewer=h.tabs.get(h.e.run.tabs.reviewer.id);
+  reviewer.inputOccupied=true;reviewer.draft=prompt;
+  await h.e.tick();assert.equal(h.sent.length,2);assert.equal(h.sent[1].prompt,prompt);
+
+  const h2=harness();await h2.e.begin(h2.config);await h2.e.tick();await answer(h2,'初稿');
+  const marker2='【接力结束_protect】';
+  h2.e.run.pending={taskId:'protect-task',marker:marker2,phase:'prepared',started:1000,prompt:C.promptFor(h2.e.run,'review',marker2)};
+  const reviewer2=h2.tabs.get(h2.e.run.tabs.reviewer.id);
+  reviewer2.inputOccupied=true;reviewer2.draft='用户自己的草稿';
+  await h2.e.tick();assert.equal(h2.sent.length,1);assert.equal(h2.e.run.status,'paused');assert.match(h2.e.run.error,/其他文字/);
+});
+test('a confirmed unsent prompt becomes retryable only after explicit resume',async()=>{
+  const h=harness();let attempts=0;
+  h.io.send=async(id,p)=>{h.sent.push({id,...p});attempts++;return attempts===1?{ok:false,retryableDraft:true,error:'未发送'}:{ok:true};};
+  await h.e.begin(h.config);await h.e.tick();assert.equal(h.e.run.status,'paused');assert.equal(h.e.run.pending.phase,'prepared');assert.equal(attempts,1);
+  await h.e.tick();assert.equal(attempts,1);
+  const tab=h.tabs.get(h.e.run.tabs.primary.id);tab.inputOccupied=true;tab.draft=h.e.run.pending.prompt;
+  await h.e.resume();await h.e.tick();assert.equal(attempts,2);assert.equal(h.e.run.pending.phase,'waiting');
 });

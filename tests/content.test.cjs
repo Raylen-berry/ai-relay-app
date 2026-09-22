@@ -45,10 +45,16 @@ test('send deduplication, cancellation, and occupied-draft protection',async()=>
   assert.equal((await p.message({...msg,taskId:'task2'})).beforeClick,true);assert.equal(p.clicks(),1);
   await p.message({type:'RELAY_RESUME',runId:'run1'});
   p.document.querySelector('textarea').value='用户自己的草稿';
-  assert.match((await p.message({...msg,taskId:'task2'})).error,/已有内容/);assert.equal(p.clicks(),1);
+  assert.match((await p.message({...msg,taskId:'task2'})).error,/已有其他内容/);assert.equal(p.clicks(),1);
 });
 test('does not claim success when the page keeps the composed prompt unsent',async()=>{
   const p=page('chatgpt.com','<textarea id="prompt-textarea"></textarea><button data-testid="send-button" aria-label="Send prompt" data-send></button>');
   const result=await p.message({type:'RELAY_SEND',taskId:'stuck',runId:'run',prompt:'审核提示'});
-  assert.equal(result.ok,false);assert.equal(result.uncertain,true);assert.match(result.error,/没有确认发送/);assert.equal(p.clicks(),1);
+  assert.equal(result.ok,false);assert.equal(result.uncertain,true);assert.equal(result.retryableDraft,true);assert.match(result.error,/没有确认发送/);assert.equal(p.clicks(),1);
+});
+test('reuses this task exact prefilled prompt and clicks the current ChatGPT submit button',async()=>{
+  const p=page('chatgpt.com','<form><textarea id="prompt-textarea">审核提示</textarea><button id="composer-submit-button" type="submit" data-send></button></form>');
+  p.document.querySelector('[data-send]').addEventListener('click',ev=>{ev.preventDefault();p.document.querySelector('textarea').value='';});
+  const result=await p.message({type:'RELAY_SEND',taskId:'resume',runId:'run',prompt:'审核提示'});
+  assert.equal(result.ok,true);assert.equal(result.verified,true);assert.equal(p.clicks(),1);
 });

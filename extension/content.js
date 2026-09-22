@@ -32,10 +32,11 @@
     return false;
   }
   function snapshot() {
+    const box = input();
     const entries = select(adapter.answer, false);
     return {
-      name: adapter.name, url: location.href, input: !!input(),
-      inputOccupied: !!inputText(input()), sendFound: !!select(adapter.send)[0], busy: busy(),
+      name: adapter.name, url: location.href, input: !!box,
+      inputOccupied: !!inputText(box), draft: inputText(box), sendFound: !!findSendButton(box), busy: busy(),
       answers: entries.map(e => {
         if (adapter.name === 'Kimi') {
           const parts = [...e.querySelectorAll('.markdown')].filter(n => !n.closest('.thinking-container'));
@@ -45,6 +46,17 @@
       }).filter(a => a.text)
     };
   }
+  function findSendButton(box) {
+    const form = box?.closest?.('form');
+    for (const selector of adapter.send) {
+      const roots = form ? [form, document] : [document];
+      for (const root of roots) {
+        const button = [...root.querySelectorAll(selector)].find(e => visible(e) && enabled(e));
+        if (button) return button;
+      }
+    }
+    return null;
+  }
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
   async function send(msg) {
     if (ledger.has(msg.taskId)) return ledger.get(msg.taskId);
@@ -52,27 +64,31 @@
     const box = input();
     if (!box) return {ok: false, beforeClick: true, error: '未找到输入框，请完成登录或检查页面适配。'};
     if (busy()) return {ok: false, beforeClick: true, error: '网页正在生成回答，请等待完成。'};
-    if (inputText(box)) return {ok: false, beforeClick: true, error: '网页输入框已有内容；请检查后清空，避免覆盖草稿。'};
     if (typeof msg.prompt !== 'string' || !msg.prompt.trim()) return {ok: false, beforeClick: true, error: '发送内容为空。'};
+    const existing = normalized(inputText(box));
+    const reuseDraft = !!existing && existing === normalized(msg.prompt);
+    if (existing && !reuseDraft) return {ok: false, beforeClick: true, error: '网页输入框已有其他内容；请检查后清空，避免覆盖草稿。'};
     ledger.set(msg.taskId, {ok: false, uncertain: true, error: '正在准备发送，请先检查网页。'});
-    box.focus();
-    if (box instanceof HTMLTextAreaElement || box instanceof HTMLInputElement) {
-      const proto = box instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-      Object.getOwnPropertyDescriptor(proto, 'value').set.call(box, msg.prompt);
-      box.dispatchEvent(new Event('input', {bubbles: true}));
-      box.dispatchEvent(new Event('change', {bubbles: true}));
-    } else {
-      const range = document.createRange(); range.selectNodeContents(box);
-      const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
-      // Chromium's editing command triggers ProseMirror/Lexical input handlers.
-      // Do not fall back to innerHTML: it may look filled without updating editor state.
-      const inserted = document.execCommand('insertText', false, msg.prompt);
-      // execCommand already emits the editor's native input event. Some editors
-      // treat a second synthetic event as an unrelated update, so only supply
-      // one when the browser reports that insertText was unsupported.
-      if (!inserted) box.dispatchEvent(new InputEvent('input', {bubbles: true, inputType: 'insertText', data: msg.prompt}));
+    if (!reuseDraft) {
+      box.focus();
+      if (box instanceof HTMLTextAreaElement || box instanceof HTMLInputElement) {
+        const proto = box instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        Object.getOwnPropertyDescriptor(proto, 'value').set.call(box, msg.prompt);
+        box.dispatchEvent(new Event('input', {bubbles: true}));
+        box.dispatchEvent(new Event('change', {bubbles: true}));
+      } else {
+        const range = document.createRange(); range.selectNodeContents(box);
+        const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+        // Chromium's editing command triggers ProseMirror/Lexical input handlers.
+        // Do not fall back to innerHTML: it may look filled without updating editor state.
+        const inserted = document.execCommand('insertText', false, msg.prompt);
+        // execCommand already emits the editor's native input event. Some editors
+        // treat a second synthetic event as an unrelated update, so only supply
+        // one when the browser reports that insertText was unsupported.
+        if (!inserted) box.dispatchEvent(new InputEvent('input', {bubbles: true, inputType: 'insertText', data: msg.prompt}));
+      }
+      await sleep(200);
     }
-    await sleep(200);
     if (normalized(inputText(box)) !== normalized(msg.prompt)) {
       const result = {ok: false, beforeClick: true, error: '网页没有完整接收文字。未点击发送，请检查输入框。'};
       ledger.delete(msg.taskId); return result;
@@ -80,7 +96,7 @@
     let button;
     for (let i = 0; i < 20; i++) {
       if (cancelled.has(msg.runId)) {ledger.delete(msg.taskId); return {ok: false, beforeClick: true, error: '已停止；网页可能保留未发送文字。'};}
-      button = select(adapter.send).find(enabled);
+      button = findSendButton(box);
       if (button) break;
       await sleep(150);
     }
@@ -121,8 +137,10 @@
       attempted = true;
     }
     if (!await waitForDelivery(12)) {
-      const result = {ok: false, uncertain: attempted, error: '文字已填入，但网页没有确认发送。任务已暂停，请在该网页手动按 Enter 或点击发送；发送后回到工作台点“继续当前步骤”。'};
-      ledger.set(msg.taskId, result);
+      const result = {ok: false, uncertain: attempted, retryableDraft: true, error: '文字已填入，但网页没有确认发送。任务已暂停；直接点击“继续当前步骤”会重新尝试发送这段相同内容。'};
+      // The composer still contains this task's exact prompt, so an explicit
+      // resume may safely retry without overwriting unrelated user text.
+      ledger.delete(msg.taskId);
       return result;
     }
     const result = {ok: true, clicked: true, verified: true};

@@ -1,6 +1,7 @@
 (function(root) {
   'use strict';
   const C = typeof module !== 'undefined' ? require('./core.js') : root.RelayCore;
+  const normalized = s => String(s || '').replace(/\r\n/g, '\n').replace(/\u00a0/g, ' ').trim();
   class RelayEngine {
     constructor(io, changed, now = Date.now, uid = () => crypto.randomUUID()) {
       this.io = io; this.changed = changed; this.now = now; this.uid = uid;
@@ -103,7 +104,11 @@
         const p = this.run.pending;
         if (p.phase === 'prepared') {
           if (!snap.input) throw new Error('未找到网页输入框，请完成登录后继续。');
-          if (snap.busy || snap.inputOccupied) throw new Error('网页正在生成或输入框已有文字，请检查后清空输入框再继续。');
+          if (snap.busy) throw new Error('网页正在生成，请等待完成后继续。');
+          if (snap.inputOccupied && normalized(snap.draft) !== normalized(p.prompt)) {
+            throw new Error('网页输入框已有其他文字，请检查后清空输入框再继续。');
+          }
+          if (snap.inputOccupied) this.log('检测到当前步骤已填入的完整提示词，继续尝试发送。');
           await this.io.activate(tab.id);
           if (!this.active()) return;
           // Persist before sending so a lost response/reload cannot trigger a duplicate.
@@ -115,7 +120,7 @@
           try { ack = await this.io.send(tab.id, {...p, runId: this.run.id}); }
           catch { throw new Error('发送状态未能确认。请检查任务网页；继续只会等待结果，不会重复点击发送。'); }
           if (!ack.ok) {
-            if (ack.beforeClick) p.phase = 'prepared';
+            if (ack.beforeClick || ack.retryableDraft) p.phase = 'prepared';
             throw new Error(ack.error || '发送未完成，请检查任务页面。');
           }
           p.phase = 'waiting';

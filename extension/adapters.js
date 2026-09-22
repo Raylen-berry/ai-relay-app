@@ -13,7 +13,7 @@
     'chatgpt.com': {
       name: 'ChatGPT',
       input: ['#prompt-textarea[contenteditable="true"]', 'textarea#prompt-textarea'],
-      send: ['button[data-testid="send-button"]', 'button[aria-label="Send prompt"]', 'button[aria-label="发送提示"]', 'button[aria-label="发送消息"]'],
+      send: ['button#composer-submit-button', 'button[data-testid="send-button"]', 'button[aria-label="Send prompt"]', 'button[aria-label="Send"]', 'button[aria-label="发送提示"]', 'button[aria-label="发送消息"]', 'form button[type="submit"]'],
       answer: ['[data-message-author-role="assistant"] .markdown', '[data-message-author-role="assistant"]'],
       busy: ['button[data-testid="stop-button"]', 'button[aria-label="Stop streaming"]', 'button[aria-label="停止流式传输"]']
     },
