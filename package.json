@@ -1,0 +1,15 @@
+{
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "linkedom": "^0.18.13"
+  },
+  "name": "ai-relay-app",
+  "version": "0.3.2",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "build": "node tools-build.cjs",
+    "preview": "node preview-server.cjs",
+    "icons": "node tools-icons.cjs"
+  }
+}

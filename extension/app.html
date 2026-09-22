@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>AI 互审 · Relay</title><link rel="icon" type="image/png" href="icon-32.png"><link rel="stylesheet" href="app.css"></head>
+<body>
+  <aside class="rail"><img class="monogram" src="brand.svg" alt="AI 互审：双向接力对话"><div class="rail-label">AI RELAY</div><div class="rail-bottom">互相检验<br>认真作答</div></aside>
+  <main>
+    <header><div><p class="eyebrow">你的多模型工作台 · 网页版</p><h1>一个问题，<span>多一重检验。</span></h1><p class="subtitle">初稿交给另一模型审核，再回到原模型定稿。</p></div><span class="badge" id="modeBadge">本地保存</span></header>
+    <section class="routing" aria-label="模型选择">
+      <label><span class="tiny">01 · 回答与定稿</span><select id="primary" aria-label="回答模型"><option value="deepseek">DeepSeek</option><option value="chatgpt">ChatGPT</option><option value="kimi">Kimi</option></select></label>
+      <div class="route-arrow">⇄</div>
+      <label><span class="tiny">02 · 独立审核</span><select id="reviewer" aria-label="审核模型"><option value="chatgpt">ChatGPT</option><option value="deepseek">DeepSeek</option><option value="kimi">Kimi</option></select></label>
+      <div class="route-note">使用当前浏览器的登录状态<br><b>两个模型需在同一浏览器中登录</b></div>
+    </section>
+    <div id="previewNotice" class="notice" hidden>这是界面预览。要自动操作模型网页，请按安装说明将 extension 文件夹加载到浏览器，然后点击扩展图标。</div>
+    <section class="workspace">
+      <article class="panel input-panel"><div class="panel-head"><h2>你的问题</h2><span id="charCount" class="tiny">0 字</span></div><textarea id="question" aria-label="问题或研究材料" placeholder="输入你想研究的问题，或粘贴需要检查的内容。&#10;&#10;例如：帮我拟一份新产品上线计划，检查其中的遗漏，并给出修订版。"></textarea><div class="panel-foot"><span class="tiny">内容会发送给上方两个模型</span><button id="start" class="primary">开始互审 <span>↗</span></button></div></article>
+      <article class="panel output-panel"><div class="panel-head"><h2>最终结果</h2><span class="tiny" id="resultLabel">等待开始</span></div><textarea id="finalOut" aria-label="最终结果" placeholder="经过审核和修订的答案，会自动出现在这里。" readonly></textarea><div class="panel-foot"><span class="tiny">可直接复制使用</span><button id="copyFinal" class="secondary">复制结果</button></div></article>
+    </section>
+    <section class="progress-box"><div class="progress-top"><div id="steps" class="steps"><span data-stage="0">1 生成初稿</span><i>→</i><span data-stage="1">2 交叉审核</span><i>→</i><span data-stage="2">3 原模型定稿</span><i>→</i><span data-stage="3">4 完成</span></div><div class="actions"><button id="pause" class="text-btn" disabled>停止</button><button id="resume" class="secondary" disabled>继续当前步骤</button></div></div><div id="status" role="status" aria-live="polite">就绪 · 输入问题后，点击「开始互审」</div><div id="error" class="error" hidden></div><div class="tiny running-note">运行时请保持本窗口和任务网页打开。每次创建独立对话；不影响原有聊天。</div><div class="page-links"><button id="showPrimary" class="text-btn">查看回答网页 ↗</button><button id="showReviewer" class="text-btn">查看审核网页 ↗</button><button id="diagnose" class="text-btn">检查连接</button></div></section>
+    <details class="details"><summary>查看过程与手动接续 <span>保留每一步结果</span></summary><div class="process-grid"><label>第一轮答案<textarea id="firstOut" readonly></textarea></label><label>审核意见<textarea id="reviewOut" readonly></textarea></label></div><label>完整定稿（含修正处理）<textarea id="lastOut" readonly></textarea></label><div class="recovery"><h3>网页中断时，接着做</h3><p class="tiny">先停止任务。可复制本轮提示到对应任务网页，手动发送；或将当前步骤的完整回答粘贴在这里，然后点击「采用此回答」。</p><button id="copyPrompt" class="secondary">复制本轮提示</button><textarea id="manual" aria-label="手动补入回答" placeholder="只粘贴当前步骤的完整回答"></textarea><button id="acceptManual" class="secondary">采用此回答</button></div><pre id="logs" aria-label="运行记录"></pre></details>
+    <details class="details"><summary>设置与数据 <span>自动保存 · 导入导出 · 提示词</span></summary><div class="settings-row"><label>单轮最长等待 <select id="timeout"><option value="5">5 分钟</option><option value="15" selected>15 分钟</option><option value="30">30 分钟</option><option value="60">60 分钟</option></select></label><button id="export" class="secondary">导出 JSON</button><label class="file-button">导入 JSON<input id="import" type="file" accept=".json,application/json"></label><button id="clear" class="text-btn">清空本地记录</button></div><p class="tiny">支持导入原 v2 数据。导入仅恢复文字和设置，不会自动发送。数据保存在本机此浏览器内。</p><label>初稿提示词<textarea id="templateFirst"></textarea></label><label>审核提示词<textarea id="templateReview"></textarea></label><label>定稿提示词<textarea id="templateFinal"></textarea></label><p class="tiny">可用变量：{q} 原始问题，{first} 初稿，{review} 审核意见，{primary} 回答模型，{reviewer} 审核模型。</p><button id="resetTemplates" class="secondary">恢复默认提示词</button></details>
+    <footer><span>AI 互审 · Relay 0.3.2 测试版</span><span>支持普通文字对话 · 使用网页当前选定的模型和模式 · 暂不支持 Kimi 桌面端</span></footer>
+  </main>
+  <script src="core.js"></script><script src="engine.js"></script><script src="app.js"></script>
+</body></html>

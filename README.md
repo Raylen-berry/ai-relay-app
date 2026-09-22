@@ -1,0 +1,49 @@
+# AI 互审 · Relay 0.3.2
+
+<img src="assets/relay-128.png" alt="AI 互审图标" width="96">
+
+Windows 启动助手 + Chromium Manifest V3 扩展。使用同一浏览器配置内已登录的 DeepSeek / ChatGPT / Kimi 网页，自动完成初稿、独立审核和原对话定稿。实际执行者是浏览器扩展；EXE 只负责启动和安装引导。
+
+用户请先打开 `开始使用.html`。运行无第三方依赖，无需 Node/Python/API Key。
+
+## 安装包
+
+仓库中的 `AI-Relay-0.3.2-Windows.zip` 包含运行文件、矢量图标、Windows 图标、源码和测试。完整解压后打开 `AI互审启动助手.exe`。也可运行 `Install.ps1` 将应用复制到 `D:\APP\AI-Relay` 并创建桌面和开始菜单快捷方式。浏览器扩展需要在所选浏览器加载一次；不能只靠 EXE 自动控制网页。
+
+图标采用双向对话气泡，表达送审与回传。SVG、PNG、ICO 与 EXE/扩展/工作台标识已统一。
+
+## 开发与验证
+
+需要 Node 22+。`npm ci --ignore-scripts` 后执行 `npm test`。测试依赖 linkedom 只用于 DOM fixtures，不包含于扩展运行环境。
+
+`node tools-build.cjs` 先生成图标，再使用系统 .NET Framework C# 编译器生成带图标的启动助手，并在首次构建时生成稳定的公开扩展标识。仅存公钥，无私钥。不要更改 manifest.json 中的 key，否则扩展 ID 和本地数据空间会变化。
+
+`node preview-server.cjs` 在 127.0.0.1:8766 提供界面预览，不连接任何模型。浏览器自动化运行需安装 extension 文件夹。
+
+## 文件
+
+- extension/core.js：纯模板、解析、导入、完成检测。
+- extension/engine.js：可测试的三轮接力状态机。
+- extension/content.js：网站内容脚本；显式消息触发读取/发送，发送幂等账本。
+- extension/adapters.js：网页控件适配规则。
+- extension/app.*：独立操作窗口，任务保存在 chrome.storage.local。
+- extension/background.js：单窗口入口，不承载长运行任务。
+- launcher/Launcher.cs：Windows 启动助手。
+
+## 设计边界
+
+只要求 storage、clipboardWrite 和三个网站的 host permissions；不读取 Cookie，不使用 debugger 权限、抓包或内部接口，不接触其他域。无遥测、后端和远程代码。host permissions 可读取对应网站标签页，实际代码仅在工作台主动请求时读取任务网页。存储访问限制为扩展的 trusted contexts。
+
+每轮随机唯一结束标记 + 正式回答区域 + 非生成状态 + 6 秒稳定窗口。没有标记时不猜测回答已结束，暂停后可人工接续。仅文字对话；网站的研究、代理工具、附件、制图等工作流不在本版验证范围内。
+
+发送前持久化 dispatching；通信丢失后不重发，恢复只读结果。任务窗口重开后暂停，需显式继续。navigator.locks 防止多个工作台同时驱动。停止阻止后续传递，不能撤回已发送请求，不承诺停止远端生成。
+
+创建独立任务页面，共享浏览器的登录状态；不会附着或改写用户已有聊天。最终轮复用初稿标签页，并核对初稿唯一标记仍在正文中。因刷新、虚拟滚动、网页改版或上下文丢失无法核实时暂停。
+
+网页适配是持续维护项。2026-09-21 核对 DeepSeek/ChatGPT 现有控件、Kimi 输入/发送/思考和正文分区，并通过 Kimi 简短网页测试。完整真实扩展三轮链路尚未验证。不要将模拟测试写成真实模型端到端测试。
+
+## 更新
+
+保留 extension 文件夹路径和 manifest key，修改适配器后在浏览器扩展页点击重新加载，再刷新模型任务页面。建议先导出工作台 JSON。导入 v2/v3 只恢复允许的文字字段，不导入标签页标识、运行状态或任意站点地址。
+
+参考：[Chrome content scripts](https://developer.chrome.com/docs/extensions/develop/concepts/content-scripts)、[Chrome windows API](https://developer.chrome.com/docs/extensions/reference/api/windows)、[加载本地扩展](https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked)。

@@ -1,0 +1,13 @@
+node_modules/
+*.log
+.env
+.env.*
+!.env.example
+dist/
+artifacts/
+*.user
+*.suo
+.DS_Store
+Thumbs.db
+relay-state*.json
+ai-relay-20*.json

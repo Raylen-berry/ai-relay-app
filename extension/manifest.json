@@ -1,0 +1,54 @@
+{
+  "manifest_version": 3,
+  "name": "AI 互审 · Relay",
+  "description": "使用已登录的模型网页，自动完成初稿、交叉审核和回传定稿。",
+  "version": "0.3.2",
+  "minimum_chrome_version": "114",
+  "permissions": [
+    "storage",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "https://chat.deepseek.com/*",
+    "https://chatgpt.com/*",
+    "https://www.kimi.com/*",
+    "https://kimi.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "打开 AI 互审",
+    "default_icon": {
+      "16": "icon-16.png",
+      "32": "icon-32.png",
+      "48": "icon-48.png",
+      "128": "icon-128.png"
+    }
+  },
+  "icons": {
+    "16": "icon-16.png",
+    "32": "icon-32.png",
+    "48": "icon-48.png",
+    "128": "icon-128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chat.deepseek.com/*",
+        "https://chatgpt.com/*",
+        "https://www.kimi.com/*",
+        "https://kimi.com/*"
+      ],
+      "js": [
+        "adapters.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'self'"
+  },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAx9ZTa+gW7i/cI5OcrMitl6WYgEP1/BN7tOe/eIGZFpodXOVsnCI5xPY/AwWaN+vC+qJuOQeX0TUtLGNkNbi6G+v2TJ4oPRLFYStYBmF12B93PC/uNITti540zod0zeSEWFN4WVXGqQVu6pBKQp2LWY7z5/6P+oE+MgRyIVFg40Oum8N/S9GbmneO9h8T9d28ZX/Coud2/6g0gs9AKq4TLCrsb+1MZ0/48HVtQRQFA3EYp5OqBWplhn2o43OYRgmOrdR3Idtt2zyEFJhF7ECrDoUVRujWCMRB6QhWKbnyMbOquYtDa/gKaatQYImEYSvjmWiWXGPNG3ARFKNBMYtVsQIDAQAB"
+}
