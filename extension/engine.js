@@ -112,10 +112,12 @@
         if (p.phase === 'prepared') {
           if (!snap.input) throw new Error('未找到网页输入框，请完成登录后继续。');
           if (snap.busy) throw new Error('网页正在生成，请等待完成后继续。');
-          if (snap.inputOccupied && !samePrompt(snap.draft, p)) {
+          const repairDraft = this.run[role] === 'kimi' && E.lostLineBreaks(snap.draft, p.prompt, p.marker);
+          if (snap.inputOccupied && !samePrompt(snap.draft, p) && !repairDraft) {
             throw new Error('网页输入框已有其他文字，请检查后清空输入框再继续。');
           }
-          if (snap.inputOccupied) this.log('检测到当前步骤已填入的完整提示词，继续尝试发送。');
+          if (repairDraft) this.log('检测到旧版遗留的本轮草稿，将恢复换行并核对全文后发送。');
+          else if (snap.inputOccupied) this.log('检测到当前步骤已填入的完整提示词，继续尝试发送。');
           await this.io.activate(tab.id);
           if (!this.active()) return;
           // Persist before sending so a lost response/reload cannot trigger a duplicate.

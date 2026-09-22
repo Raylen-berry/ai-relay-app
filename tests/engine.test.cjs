@@ -109,3 +109,18 @@ test('uncertain retry whose composer was later cleared waits instead of insertin
   await h.e.begin(h.config);await h.e.tick();assert.equal(h.e.run.status,'paused');
   await h.e.resume();await h.e.tick();assert.equal(h.sent.length,1);assert.equal(h.e.run.pending.phase,'waiting');
 });
+
+test('resuming a Kimi legacy collapsed prompt repairs only the exact pending task',async()=>{
+  for(const modified of [false,true]) {
+    const h=harness();await h.e.begin({...h.config,primary:'kimi',reviewer:'deepseek'});
+    h.io.send=async(id,p)=>{h.sent.push({id,...p});return {ok:false,beforeClick:true,error:'旧版未接收换行'};};
+    await h.e.tick();assert.equal(h.e.run.status,'paused');
+    const p=h.e.run.pending,tab=h.tabs.get(h.e.run.tabs.primary.id);
+    tab.inputOccupied=true;tab.draft=p.prompt.replace(/\n/g,'')+(modified?'用户修改':'');
+    h.io.send=async(id,p)=>{h.sent.push({id,...p});return {ok:true};};
+    await h.e.resume();await h.e.tick();
+    assert.equal(h.sent.length,modified?1:2);
+    assert.equal(h.e.run.status,modified?'paused':'running');
+    if(!modified)assert.equal(h.sent[1].prompt,p.prompt);
+  }
+});

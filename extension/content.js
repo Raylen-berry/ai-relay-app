@@ -35,7 +35,7 @@
     const box = input();
     const entries = select(adapter.answer, false);
     return {
-      protocol: 2, name: adapter.name, url: location.href, input: !!box,
+      protocol: 3, name: adapter.name, url: location.href, input: !!box,
       inputOccupied: !!inputText(box), draft: inputText(box), sendFound: !!findSendButton(box), busy: busy(),
       userMessages: select(['[data-message-author-role="user"]'], false).map(e => ({text: inputText(e)})),
       answers: entries.map(e => {
@@ -68,7 +68,8 @@
     if (typeof msg.prompt !== 'string' || !msg.prompt.trim()) return {ok: false, beforeClick: true, error: '发送内容为空。'};
     const existing = normalized(inputText(box));
     const reuseDraft = !!existing && existing === normalized(msg.prompt);
-    if (existing && !reuseDraft) return {ok: false, beforeClick: true, error: '网页输入框已有其他内容；请检查后清空，避免覆盖草稿。'};
+    const repairDraft = adapter.name === 'Kimi' && RelayEditor.lostLineBreaks(existing, msg.prompt, msg.marker);
+    if (existing && !reuseDraft && !repairDraft) return {ok: false, beforeClick: true, error: '网页输入框已有其他内容；请检查后清空，避免覆盖草稿。'};
     ledger.set(msg.taskId, {ok: false, uncertain: true, error: '正在准备发送，请先检查网页。'});
     if (!reuseDraft) {
       box.focus();
@@ -80,13 +81,22 @@
       } else {
         const range = document.createRange(); range.selectNodeContents(box);
         const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
-        // Chromium's editing command triggers ProseMirror/Lexical input handlers.
-        // Do not fall back to innerHTML: it may look filled without updating editor state.
-        const inserted = document.execCommand('insertText', false, msg.prompt);
-        // execCommand already emits the editor's native input event. Some editors
-        // treat a second synthetic event as an unrelated update, so only supply
-        // one when the browser reports that insertText was unsupported.
-        if (!inserted) box.dispatchEvent(new InputEvent('input', {bubbles: true, inputType: 'insertText', data: msg.prompt}));
+        if (box.getAttribute('data-lexical-editor') === 'true' || adapter.name === 'Kimi') {
+          // Kimi's single-line Lexical insertText path removes all newlines.
+          // Its paste handler accepts multiline plain text and updates editor state.
+          // This event does not read or overwrite the system clipboard.
+          try {
+            const data = new DataTransfer(); data.setData('text/plain', msg.prompt);
+            box.dispatchEvent(new ClipboardEvent('paste', {clipboardData: data, bubbles: true, cancelable: true, composed: true}));
+          } catch {
+            ledger.delete(msg.taskId);
+            return {ok: false, beforeClick: true, error: '网页未接收多行粘贴，未点击发送。请刷新该模型页面后继续。'};
+          }
+        } else {
+          // Never fall back to innerHTML: it can bypass the editor's state.
+          const inserted = document.execCommand('insertText', false, msg.prompt);
+          if (!inserted) box.dispatchEvent(new InputEvent('input', {bubbles: true, inputType: 'insertText', data: msg.prompt}));
+        }
       }
       for (let i = 0; i < 16; i++) {
         await sleep(125);

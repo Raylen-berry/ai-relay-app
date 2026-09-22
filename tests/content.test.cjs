@@ -7,11 +7,20 @@ function page(host, html) {
   const {window} = parseHTML('<html><body>'+html+'</body></html>');
   let receive, clicks=0;
   window.Element.prototype.getClientRects=()=>[{width:100,height:30}];
+  class DataTransfer {
+    constructor(){this.data=new Map();}
+    setData(type,text){this.data.set(type,text);}
+    getData(type){return this.data.get(type)||'';}
+  }
+  class ClipboardEvent extends window.Event {
+    constructor(type,options){super(type,options);this.clipboardData=options.clipboardData;}
+  }
   const context = vm.createContext({
     document:window.document, window, location:{hostname:host,href:'https://'+host+'/chat/test'},
     HTMLTextAreaElement:window.HTMLTextAreaElement,HTMLInputElement:window.HTMLInputElement,HTMLButtonElement:window.HTMLButtonElement,
     KeyboardEvent:window.KeyboardEvent || window.Event,
     Event:window.Event,InputEvent:window.InputEvent || window.Event,
+    DataTransfer,ClipboardEvent,
     getComputedStyle:()=>({visibility:'visible'}),setTimeout:fn=>setImmediate(fn),console,
     chrome:{runtime:{id:'relay',onMessage:{addListener:fn=>receive=fn}}}
   });
@@ -68,7 +77,7 @@ test('long contenteditable paragraphs preserve blank lines, indentation and Mark
   // Browser innerText is layout dependent; the editor document is not.
   Object.defineProperty(box,'innerText',{get:()=>lines.join('\n\n')});
   assert.equal(E.read(box),prompt);
-  const snap=await p.message({type:'RELAY_SNAPSHOT'});assert.equal(snap.draft,prompt);assert.equal(snap.protocol,2);
+  const snap=await p.message({type:'RELAY_SNAPSHOT'});assert.equal(snap.draft,prompt);assert.equal(snap.protocol,3);
   p.document.querySelector('[data-send]').addEventListener('click',()=>{box.replaceChildren();});
   const result=await p.message({type:'RELAY_SEND',taskId:'long',runId:'run',prompt});
   assert.equal(result.ok,true);assert.equal(p.clicks(),1);
@@ -116,4 +125,47 @@ test('draft edited while send button is enabling is never sent',async()=>{
   box.addEventListener('input',()=>setImmediate(()=>setImmediate(()=>{box.value='后来修改的内容';p.document.querySelector('[data-send]').disabled=false;})));
   const result=await p.message({type:'RELAY_SEND',taskId:'race',runId:'run',prompt:'原始内容'});
   assert.equal(result.beforeClick,true);assert.equal(p.clicks(),0);assert.equal(box.value,'后来修改的内容');
+});
+
+// Matches the real Kimi DOM captured on 2026-09-22: a single paragraph and
+// Lexical text span. insertText dropped LF; plain-text paste retained them.
+function kimiPage(draft='') {
+  const p=page('www.kimi.com','<div class="chat-input-editor" data-lexical-editor="true" contenteditable="true" role="textbox"><p><span data-lexical-text="true"></span></p></div><div class="send-button-container" data-send><svg name="Send"></svg></div>');
+  const box=p.document.querySelector('.chat-input-editor');
+  box.querySelector('span').textContent=draft;
+  p.document.createRange=()=>({selectNodeContents(){}});
+  p.window.getSelection=()=>({removeAllRanges(){},addRange(){}});
+  p.document.execCommand=(command,ui,text)=>{box.querySelector('span').textContent=text.replace(/\n/g,'');return true;};
+  return {...p,box};
+}
+test('Kimi fresh and legacy collapsed drafts use paste preserving all line breaks',async()=>{
+  const E=require('../extension/editor.js'),marker='【接力结束_kimi】';
+  const prompt='问题\n\n中文 **Markdown**\n```js\n  const x = 1;\n```\n'+marker;
+  for(const legacy of [false,true]) {
+    const p=kimiPage(legacy?prompt.replace(/\n/g,''):'');let pastes=0,submitted;
+    p.box.addEventListener('paste',event=>{
+      pastes++;event.preventDefault();
+      setImmediate(()=>{p.box.querySelector('span').textContent=event.clipboardData.getData('text/plain');});
+    });
+    p.document.querySelector('[data-send]').addEventListener('click',()=>{submitted=E.read(p.box);p.box.querySelector('span').textContent='';});
+    const result=await p.message({type:'RELAY_SEND',taskId:'paste',runId:'run',marker,prompt});
+    assert.equal(result.ok,true);assert.equal(pastes,1);assert.equal(submitted,prompt);assert.equal(p.clicks(),1);
+  }
+});
+test('Kimi paste refusal or newline loss pauses without clicking or insertText fallback',async()=>{
+  for(const mode of ['refused','flattened']) {
+    const p=kimiPage();let fallback=0;p.document.execCommand=()=>{fallback++;};
+    p.box.addEventListener('paste',event=>{if(mode==='flattened')p.box.querySelector('span').textContent=event.clipboardData.getData('text/plain').replace(/\n/g,'');});
+    const result=await p.message({type:'RELAY_SEND',taskId:'rejected',runId:'run',prompt:'第一段\n\n第二段'});
+    assert.equal(result.beforeClick,true);assert.equal(p.clicks(),0);assert.equal(fallback,0);
+  }
+});
+test('Kimi legacy recovery rejects every other text change, foreign marker and missing marker',async()=>{
+  const marker='【接力结束_kimi】',prompt='第一段\n  第二段\n'+marker;
+  for(const draft of [prompt.replace(/\n/g,'')+'额外文字',prompt.replace(/\s/g,''),prompt.replace(/\n/g,'').replace('kimi','other')]) {
+    const p=kimiPage(draft);
+    const result=await p.message({type:'RELAY_SEND',taskId:'protect',runId:'run',marker,prompt});
+    assert.equal(result.beforeClick,true);assert.equal(p.clicks(),0);assert.equal(p.box.textContent,draft);
+  }
+  assert.equal(require('../extension/editor.js').lostLineBreaks(prompt.replace(/\n/g,''),prompt,''),false);
 });

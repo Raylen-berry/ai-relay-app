@@ -28,7 +28,14 @@
     return normalize(body(element));
   }
   const same = (a, b) => normalize(a) === normalize(b);
-  const api = {normalize, read, same};
+  // Recover only the exact newline-loss transform observed in Kimi 0.3.6.
+  // The pending task marker and every other character must still match.
+  function lostLineBreaks(draft, prompt, marker) {
+    const expected = normalize(prompt), actual = normalize(draft);
+    return !!marker && expected.includes('\n') && expected.split(marker).length === 2 &&
+      actual.includes(marker) && !same(actual, expected) && actual === expected.replace(/\n/g, '');
+  }
+  const api = {normalize, read, same, lostLineBreaks};
   if (typeof module !== 'undefined') module.exports = api;
   root.RelayEditor = api;
 })(globalThis);

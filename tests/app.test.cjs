@@ -27,7 +27,7 @@ async function workbench(saved) {
     chrome:{runtime:{id:'relay',getURL:f=>'chrome-extension://relay/'+f},storage:{local:{
       get:async()=>({relay:structuredClone(storage)}),set:async value=>{storage=structuredClone(value.relay);}
     }},tabs:{create:async({url})=>newTab(url),get:async id=>tabs.get(id),update:async()=>{},
-      sendMessage:async(id,msg)=>{messages.push(msg);if(msg.type==='RELAY_SNAPSHOT')return {ok:true,protocol:2,input:true,inputOccupied:false,busy:false,url:tabs.get(id).url,answers:[]};return {ok:true};}
+      sendMessage:async(id,msg)=>{messages.push(msg);if(msg.type==='RELAY_SNAPSHOT')return {ok:true,protocol:3,input:true,inputOccupied:false,busy:false,url:tabs.get(id).url,answers:[]};return {ok:true};}
     },windows:{create:async({url})=>({id:1,tabs:[newTab(url)]}),update:async()=>{}}}
   });
   for(const file of ['core.js','editor.js','engine.js','app.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../extension',file),'utf8'),context);
