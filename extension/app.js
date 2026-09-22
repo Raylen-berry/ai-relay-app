@@ -2,9 +2,11 @@
 const C = RelayCore;
 const $ = id => document.getElementById(id);
 const isExtension = !!globalThis.chrome?.runtime?.id && !!chrome.storage;
-let config = {q: '', primary: 'deepseek', reviewer: 'chatgpt', timeout: 15, templates: {...C.templates}};
+const defaultConfig = () => ({q: '', primary: 'deepseek', reviewer: 'chatgpt', timeout: 15, templates: {...C.templates}});
+let config = defaultConfig();
 let imported = null;
-let lockedElsewhere = false;
+// Disable writes until this window owns the runner, including during startup.
+let lockedElsewhere = isExtension;
 let engine;
 let taskWindow;
 let saveChain = Promise.resolve();
@@ -22,6 +24,7 @@ function populateForm() {
   $('templateFirst').value = config.templates.first; $('templateReview').value = config.templates.review; $('templateFinal').value = config.templates.final;
 }
 function store() {
+  if (isExtension && lockedElsewhere) return Promise.resolve();
   const payload = structuredClone({config, run: engine?.run, imported});
   saveChain = saveChain.catch(() => {}).then(async () => {
     if (isExtension) await chrome.storage.local.set({relay: payload});
@@ -38,10 +41,15 @@ function render() {
   const r = engine?.run;
   const running = r?.status === 'running';
   const paused = r?.status === 'paused';
-  const busy = running || paused;
-  for (const id of ['question','primary','reviewer','timeout','templateFirst','templateReview','templateFinal','import','resetTemplates']) $(id).disabled = busy || lockedElsewhere;
+  for (const id of ['question','primary','reviewer','timeout','templateFirst','templateReview','templateFinal','resetTemplates']) $(id).disabled = running || lockedElsewhere || engine?.locked;
+  $('import').disabled = running || lockedElsewhere || engine?.locked;
+  $('newTask').disabled = running || lockedElsewhere || engine?.locked;
+  $('export').disabled = lockedElsewhere;
+  $('windowNotice').hidden = !lockedElsewhere;
+  $('questionHint').hidden = !running && !paused;
+  $('questionHint').textContent = running ? '正在处理当前问题。需要换题时，请先点“停止”，再点“新问题”。' : '已暂停，可以修改内容并开始新互审。“继续当前步骤”仍会处理原来的问题。';
   $('start').disabled = running || !isExtension || lockedElsewhere || engine?.locked;
-  $('start').textContent = r ? '重新开始 ↗' : '开始互审 ↗';
+  $('start').textContent = r ? '开始新互审 ↗' : '开始互审 ↗';
   $('pause').disabled = !running || lockedElsewhere;
   $('resume').disabled = !paused || engine?.locked || lockedElsewhere;
   $('acceptManual').disabled = !paused || engine?.locked || lockedElsewhere;
@@ -54,9 +62,9 @@ function render() {
   $('reviewOut').value = output.review || '';
   $('lastOut').value = output.final || '';
   $('finalOut').value = r?.finalOut || imported?.finalOut || '';
-  $('resultLabel').textContent = r?.status === 'done' ? '已完成' : running ? '处理中' : paused ? '等待接续' : imported ? '已导入' : '等待开始';
+  $('resultLabel').textContent = r?.status === 'done' ? '已完成' : running ? '处理中' : paused ? '等待接续' : imported?.previous ? '上次结果' : imported ? '已导入' : '等待开始';
   const states = {running: '进行中', paused: '已暂停', done: '已完成'};
-  if (r) $('status').textContent = states[r.status] + ' · ' + (C.labels[C.stages[r.stageIndex]] || '最终结果已保存');
+  $('status').textContent = r ? states[r.status] + ' · ' + (C.labels[C.stages[r.stageIndex]] || '最终结果已保存') : '就绪 · 输入问题后，点击「开始互审」';
   $('error').textContent = r?.error || '';
   $('error').hidden = !r?.error;
   $('logs').textContent = (r?.logs || []).map(x => new Date(x.at).toLocaleTimeString() + '  ' + x.text).join('\n');
@@ -129,14 +137,17 @@ function bind(id, fn) {
     catch (e) { message(e.message, true); }
   });
 }
-async function initialize() {
-  engine = new RelayEngine(io, async () => {render(); await store();});
+async function loadSaved() {
   let saved;
   try { saved = isExtension ? (await chrome.storage.local.get('relay')).relay : JSON.parse(localStorage.getItem('aiRelayPreview')); }
   catch { message('未能读取本地记录。', true); }
-  if (saved?.config) config = C.importData({config: saved.config}).config;
+  config = saved?.config ? C.importData({config: saved.config}).config : defaultConfig();
   imported = saved?.imported || null;
-  if (saved?.run) engine.restore(saved.run);
+  engine.restore(saved?.run || null);
+}
+async function initialize() {
+  engine = new RelayEngine(io, async () => {render(); await store();});
+  await loadSaved();
   populateForm(); render();
   $('previewNotice').hidden = isExtension;
   $('modeBadge').textContent = isExtension ? '本地保存' : '界面预览';
@@ -151,6 +162,27 @@ async function initialize() {
     if (engine.run && !confirm('开始一个新任务？当前工作台的过程记录将被替换；如需保留，请先导出 JSON。')) return;
     readForm(); C.validate(config); imported = null;
     await engine.begin(config); await engine.tick(); render();
+  });
+  bind('newTask', async () => {
+    if (lockedElsewhere || engine.locked || engine.run?.status === 'running') return;
+    clearTimeout(saveTimer);
+    if (engine.run) {
+      const r = engine.run;
+      imported = {...C.importData({config: r, run: r, finalOut: r.finalOut}), previous: true};
+    }
+    engine.run = null; taskWindow = null; config.q = ''; transient = null;
+    $('manual').value = ''; populateForm(); render(); await store();
+    $('question').focus(); message('可以输入新问题；上次结果暂时保留在右侧，开始新互审后更新。');
+  });
+  bind('showOtherWorkbench', async () => {
+    const current = await chrome.tabs.getCurrent();
+    const url = chrome.runtime.getURL('app.html');
+    const windows = await chrome.windows.getAll({populate: true});
+    for (const win of windows) {
+      const tab = win.tabs?.find(t => t.url === url && t.id !== current?.id);
+      if (tab) {await chrome.tabs.update(tab.id, {active: true}); await chrome.windows.update(win.id, {focused: true}); return;}
+    }
+    message('原窗口可能刚关闭，本窗口会自动接管。');
   });
   bind('pause', async () => {await engine.pause(); render();});
   bind('resume', async () => {await engine.resume(); await engine.tick(); render();});
@@ -212,11 +244,14 @@ async function initialize() {
     if (engine.run?.status === 'running') {e.preventDefault(); e.returnValue = '';}
   });
   if (isExtension) {
-    navigator.locks.request('ai-relay-runner', {ifAvailable: true}, async lock => {
-      if (!lock) {lockedElsewhere = true; render(); message('另一个工作台窗口已经打开，请使用那个窗口。', true); return;}
+    // Queue for ownership: when an older window closes this one must recover.
+    navigator.locks.request('ai-relay-runner', async () => {
+      // Re-read after acquisition, never resume using a stale waiting-window copy.
+      await loadSaved(); lockedElsewhere = false; transient = null;
+      populateForm(); render();
       setInterval(async () => {try {await engine.tick(); render();} catch(e) {message(e.message, true);}}, 1500);
       await new Promise(() => {});
-    }).catch(e => message('无法取得工作台锁：' + e.message, true));
+    }).catch(e => message('无法连接工作台：' + e.message + '。请关闭其他工作台后重新打开。', true));
   }
 }
 initialize().catch(e => message('初始化失败：' + e.message, true));
