@@ -2,6 +2,7 @@
   'use strict';
   const C = typeof module !== 'undefined' ? require('./core.js') : root.RelayCore;
   const normalized = s => String(s || '').replace(/\r\n/g, '\n').replace(/\u00a0/g, ' ').trim();
+  const samePrompt = (draft, pending) => normalized(draft) === normalized(pending.prompt) || (!!pending.marker && String(draft || '').includes(pending.marker));
   class RelayEngine {
     constructor(io, changed, now = Date.now, uid = () => crypto.randomUUID()) {
       this.io = io; this.changed = changed; this.now = now; this.uid = uid;
@@ -102,10 +103,15 @@
           await this.save();
         }
         const p = this.run.pending;
+        if (p.phase === 'prepared' && snap.answers.some(a => a.text.includes(p.marker))) {
+          p.phase = 'waiting'; p.started = this.now();
+          this.log('检测到本轮提示词已由用户发送，继续收取回答，不再重复发送。');
+          await this.save();
+        }
         if (p.phase === 'prepared') {
           if (!snap.input) throw new Error('未找到网页输入框，请完成登录后继续。');
           if (snap.busy) throw new Error('网页正在生成，请等待完成后继续。');
-          if (snap.inputOccupied && normalized(snap.draft) !== normalized(p.prompt)) {
+          if (snap.inputOccupied && !samePrompt(snap.draft, p)) {
             throw new Error('网页输入框已有其他文字，请检查后清空输入框再继续。');
           }
           if (snap.inputOccupied) this.log('检测到当前步骤已填入的完整提示词，继续尝试发送。');

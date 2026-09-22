@@ -88,3 +88,12 @@ test('a confirmed unsent prompt becomes retryable only after explicit resume',as
   const tab=h.tabs.get(h.e.run.tabs.primary.id);tab.inputOccupied=true;tab.draft=h.e.run.pending.prompt;
   await h.e.resume();await h.e.tick();assert.equal(attempts,2);assert.equal(h.e.run.pending.phase,'waiting');
 });
+test('a manually submitted prepared prompt is collected instead of sent twice',async()=>{
+  const h=harness();await h.e.begin(h.config);await h.e.tick();await answer(h,'初稿');
+  const marker='【接力结束_manualsend】';
+  h.e.run.pending={taskId:'manual-send',marker,phase:'prepared',started:1000,prompt:C.promptFor(h.e.run,'review',marker)};
+  const reviewer=h.tabs.get(h.e.run.tabs.reviewer.id);
+  reviewer.answers.push({text:'审核意见'+marker});
+  await h.e.tick();assert.equal(h.sent.length,1);assert.equal(h.e.run.pending.phase,'waiting');
+  h.advance(7000);await h.e.tick();assert.equal(h.sent.length,1);assert.equal(h.e.run.outputs.review,'审核意见');
+});

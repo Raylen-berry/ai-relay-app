@@ -1,4 +1,4 @@
-# AI 互审 · Relay 0.3.3
+# AI 互审 · Relay 0.3.4
 
 <img src="assets/relay-128.png" alt="AI 互审图标" width="96">
 
@@ -8,7 +8,7 @@ Windows 启动助手 + Chromium Manifest V3 扩展。使用同一浏览器配置
 
 ## 安装包
 
-仓库中的 `AI-Relay-0.3.3-Windows.zip` 包含运行文件、矢量图标、Windows 图标、源码和测试。完整解压后打开 `AI互审启动助手.exe`。也可运行 `Install.ps1` 将应用复制到 `D:\APP\AI-Relay` 并创建桌面和开始菜单快捷方式。浏览器扩展需要在所选浏览器加载一次；不能只靠 EXE 自动控制网页。
+仓库中的 `AI-Relay-0.3.4-Windows.zip` 包含运行文件、矢量图标、Windows 图标、源码和测试。完整解压后打开 `AI互审启动助手.exe`。也可运行 `Install.ps1` 将应用复制到 `D:\APP\AI-Relay` 并创建桌面和开始菜单快捷方式。浏览器扩展需要在所选浏览器加载一次；不能只靠 EXE 自动控制网页。
 
 图标采用双向对话气泡，表达送审与回传。SVG、PNG、ICO 与 EXE/扩展/工作台标识已统一。
 

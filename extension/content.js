@@ -66,7 +66,7 @@
     if (busy()) return {ok: false, beforeClick: true, error: '网页正在生成回答，请等待完成。'};
     if (typeof msg.prompt !== 'string' || !msg.prompt.trim()) return {ok: false, beforeClick: true, error: '发送内容为空。'};
     const existing = normalized(inputText(box));
-    const reuseDraft = !!existing && existing === normalized(msg.prompt);
+    const reuseDraft = !!existing && (existing === normalized(msg.prompt) || (!!msg.marker && existing.includes(msg.marker)));
     if (existing && !reuseDraft) return {ok: false, beforeClick: true, error: '网页输入框已有其他内容；请检查后清空，避免覆盖草稿。'};
     ledger.set(msg.taskId, {ok: false, uncertain: true, error: '正在准备发送，请先检查网页。'});
     if (!reuseDraft) {
