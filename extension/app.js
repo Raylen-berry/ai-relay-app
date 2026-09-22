@@ -98,9 +98,13 @@ const io = {
       if (engine.run?.status !== 'running' && i > 0) throw new Error('等待连接已停止。');
       try {
         const data = await chrome.tabs.sendMessage(id, {type: 'RELAY_SNAPSHOT'});
+        if (data?.ok && data.protocol !== 2) {
+          const error = new Error(C.providers[provider].name + ' 页面仍在使用旧版连接脚本。请刷新这个模型任务页面，再点继续；只重新加载扩展还不够。');
+          error.relayUpdate = true; throw error;
+        }
         if (data?.ok && data.input) return data;
         if (data?.ok && i === 23) return data;
-      } catch { /* Wait for page load, never resend an actual prompt here. */ }
+      } catch (e) { if (e.relayUpdate) throw e; /* Wait for page load without resending. */ }
       await sleep(500);
     }
     throw new Error(C.providers[provider].name + ' 页面未连接。请检查网络、登录，并刷新任务网页后继续。');

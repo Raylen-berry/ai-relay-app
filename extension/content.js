@@ -15,9 +15,9 @@
     return [];
   }
   const input = () => select(adapter.input)[0];
-  const inputText = e => (e?.value ?? e?.innerText ?? '').trim();
+  const inputText = RelayEditor.read;
   const enabled = e => e && !e.disabled && e.getAttribute('aria-disabled') !== 'true' && !/(^|[\s-])disabled($|\s)/.test(e.className);
-  const normalized = s => String(s || '').replace(/\r\n/g, '\n').replace(/\u00a0/g, ' ').trim();
+  const normalized = RelayEditor.normalize;
   function busy() {
     if (select(adapter.busy).length) return true;
     // DeepSeek switches the circular send arrow to a stop square while generating.
@@ -35,8 +35,9 @@
     const box = input();
     const entries = select(adapter.answer, false);
     return {
-      name: adapter.name, url: location.href, input: !!box,
+      protocol: 2, name: adapter.name, url: location.href, input: !!box,
       inputOccupied: !!inputText(box), draft: inputText(box), sendFound: !!findSendButton(box), busy: busy(),
+      userMessages: select(['[data-message-author-role="user"]'], false).map(e => ({text: inputText(e)})),
       answers: entries.map(e => {
         if (adapter.name === 'Kimi') {
           const parts = [...e.querySelectorAll('.markdown')].filter(n => !n.closest('.thinking-container'));
@@ -49,7 +50,7 @@
   function findSendButton(box) {
     const form = box?.closest?.('form');
     for (const selector of adapter.send) {
-      const roots = form ? [form, document] : [document];
+      const roots = form ? [form] : [document];
       for (const root of roots) {
         const button = [...root.querySelectorAll(selector)].find(e => visible(e) && enabled(e));
         if (button) return button;
@@ -66,7 +67,7 @@
     if (busy()) return {ok: false, beforeClick: true, error: '网页正在生成回答，请等待完成。'};
     if (typeof msg.prompt !== 'string' || !msg.prompt.trim()) return {ok: false, beforeClick: true, error: '发送内容为空。'};
     const existing = normalized(inputText(box));
-    const reuseDraft = !!existing && (existing === normalized(msg.prompt) || (!!msg.marker && existing.includes(msg.marker)));
+    const reuseDraft = !!existing && existing === normalized(msg.prompt);
     if (existing && !reuseDraft) return {ok: false, beforeClick: true, error: '网页输入框已有其他内容；请检查后清空，避免覆盖草稿。'};
     ledger.set(msg.taskId, {ok: false, uncertain: true, error: '正在准备发送，请先检查网页。'});
     if (!reuseDraft) {
@@ -87,60 +88,54 @@
         // one when the browser reports that insertText was unsupported.
         if (!inserted) box.dispatchEvent(new InputEvent('input', {bubbles: true, inputType: 'insertText', data: msg.prompt}));
       }
-      await sleep(200);
+      for (let i = 0; i < 16; i++) {
+        await sleep(125);
+        if (RelayEditor.same(inputText(input()), msg.prompt)) break;
+      }
     }
-    if (normalized(inputText(box)) !== normalized(msg.prompt)) {
+    if (normalized(inputText(input())) !== normalized(msg.prompt)) {
       const result = {ok: false, beforeClick: true, error: '网页没有完整接收文字。未点击发送，请检查输入框。'};
       ledger.delete(msg.taskId); return result;
     }
     let button;
     for (let i = 0; i < 20; i++) {
-      if (cancelled.has(msg.runId)) {ledger.delete(msg.taskId); return {ok: false, beforeClick: true, error: '已停止；网页可能保留未发送文字。'};}
+      if (cancelled.has(msg.runId)) {ledger.delete(msg.taskId); return {ok: false, beforeClick: true, draftRetained: true, error: '已停止；网页可能保留未发送文字。'};}
       button = findSendButton(box);
       if (button) break;
       await sleep(150);
     }
     if (!button || cancelled.has(msg.runId)) {
       ledger.delete(msg.taskId);
-      return {ok: false, beforeClick: true, error: '发送按钮不可用；请检查登录、字数限制或网页改版。'};
+      return {ok: false, beforeClick: true, draftRetained: true, error: '发送按钮不可用；提示词已保留。检查网页后可继续当前步骤。'};
     }
-    // A visible click is not proof of delivery. Chat editors occasionally show
-    // the pasted text while their internal state still considers the composer
-    // empty. Confirm that the composer clears or generation starts before
-    // reporting success, then use two site-neutral submission fallbacks.
+    // One submission per attempt. A slow response must not trigger several
+    // independent submissions through click, requestSubmit and Enter.
     const delivered = () => {
       const current = input();
-      return !current || !normalized(inputText(current)) || busy();
+      return (current && !normalized(inputText(current))) || busy() ||
+        (!!msg.marker && snapshot().userMessages.some(m => m.text.includes(msg.marker)));
     };
-    const waitForDelivery = async (rounds = 12) => {
+    const waitForDelivery = async (rounds = 40) => {
       for (let i = 0; i < rounds; i++) {
         if (delivered()) return true;
+        if (cancelled.has(msg.runId)) return false;
         await sleep(125);
       }
       return delivered();
     };
-    let attempted = false;
-    button.click(); attempted = true;
-    if (!await waitForDelivery()) {
-      const form = box.closest('form');
-      if (form?.requestSubmit) {
-        try { form.requestSubmit(button instanceof HTMLButtonElement ? button : undefined); attempted = true; } catch (_) {}
-      }
-    }
-    if (!await waitForDelivery(8)) {
-      // Kimi and some localized ChatGPT/DeepSeek layouts temporarily omit or
-      // replace the normal send button. Their composers still accept Enter.
-      box.focus();
-      for (const type of ['keydown', 'keypress', 'keyup']) {
-        box.dispatchEvent(new KeyboardEvent(type, {key: 'Enter', code: 'Enter', bubbles: true, cancelable: true}));
-      }
-      attempted = true;
-    }
-    if (!await waitForDelivery(12)) {
-      const result = {ok: false, uncertain: attempted, retryableDraft: true, error: '文字已填入，但网页没有确认发送。任务已暂停；直接点击“继续当前步骤”会重新尝试发送这段相同内容。'};
-      // The composer still contains this task's exact prompt, so an explicit
-      // resume may safely retry without overwriting unrelated user text.
+    // Recheck immediately before the irreversible action, including edits made
+    // by the user while the send button was becoming available.
+    if (!RelayEditor.same(inputText(input()), msg.prompt)) {
       ledger.delete(msg.taskId);
+      return {ok:false, beforeClick:true, error:'发送前输入内容发生变化，已暂停。'};
+    }
+    button.click();
+    if (!await waitForDelivery()) {
+      const retryableDraft = !cancelled.has(msg.runId) && RelayEditor.same(inputText(input()), msg.prompt);
+      const result = {ok: false, uncertain: true, retryableDraft, error: retryableDraft
+        ? '文字已填入，但网页没有确认发送。任务已暂停；确认网页没有发出后，可点“继续当前步骤”重试。'
+        : '发送状态未确认，任务已暂停。请检查网页；继续时先等待结果，避免重复发送。'};
+      if (retryableDraft) ledger.delete(msg.taskId); else ledger.set(msg.taskId, result);
       return result;
     }
     const result = {ok: true, clicked: true, verified: true};

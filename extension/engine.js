@@ -1,8 +1,8 @@
 (function(root) {
   'use strict';
   const C = typeof module !== 'undefined' ? require('./core.js') : root.RelayCore;
-  const normalized = s => String(s || '').replace(/\r\n/g, '\n').replace(/\u00a0/g, ' ').trim();
-  const samePrompt = (draft, pending) => normalized(draft) === normalized(pending.prompt) || (!!pending.marker && String(draft || '').includes(pending.marker));
+  const E = typeof module !== 'undefined' ? require('./editor.js') : root.RelayEditor;
+  const samePrompt = (draft, pending) => E.same(draft, pending.prompt);
   class RelayEngine {
     constructor(io, changed, now = Date.now, uid = () => crypto.randomUUID()) {
       this.io = io; this.changed = changed; this.now = now; this.uid = uid;
@@ -103,7 +103,8 @@
           await this.save();
         }
         const p = this.run.pending;
-        if (p.phase === 'prepared' && snap.answers.some(a => a.text.includes(p.marker))) {
+        const submitted = [...snap.answers, ...(snap.userMessages || [])].some(a => a.text.includes(p.marker));
+        if (p.phase === 'prepared' && (submitted || (p.draftRetained && !snap.inputOccupied))) {
           p.phase = 'waiting'; p.started = this.now();
           this.log('检测到本轮提示词已由用户发送，继续收取回答，不再重复发送。');
           await this.save();
@@ -126,7 +127,9 @@
           try { ack = await this.io.send(tab.id, {...p, runId: this.run.id}); }
           catch { throw new Error('发送状态未能确认。请检查任务网页；继续只会等待结果，不会重复点击发送。'); }
           if (!ack.ok) {
-            if (ack.beforeClick || ack.retryableDraft) p.phase = 'prepared';
+            if (ack.beforeClick || ack.retryableDraft) {
+              p.phase = 'prepared'; p.draftRetained = !!(ack.draftRetained || ack.retryableDraft);
+            }
             throw new Error(ack.error || '发送未完成，请检查任务页面。');
           }
           p.phase = 'waiting';

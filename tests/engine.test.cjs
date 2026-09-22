@@ -97,3 +97,15 @@ test('a manually submitted prepared prompt is collected instead of sent twice',a
   await h.e.tick();assert.equal(h.sent.length,1);assert.equal(h.e.run.pending.phase,'waiting');
   h.advance(7000);await h.e.tick();assert.equal(h.sent.length,1);assert.equal(h.e.run.outputs.review,'审核意见');
 });
+test('submitted user message without a finished answer prevents resending on resume',async()=>{
+  const h=harness();await h.e.begin(h.config);await h.e.tick();await answer(h,'初稿');
+  const marker='【接力结束_inflight】';
+  h.e.run.pending={taskId:'inflight',marker,phase:'prepared',started:1000,prompt:C.promptFor(h.e.run,'review',marker)};
+  const tab=h.tabs.get(h.e.run.tabs.reviewer.id);tab.userMessages=[{text:h.e.run.pending.prompt}];
+  await h.e.tick();assert.equal(h.sent.length,1);assert.equal(h.e.run.pending.phase,'waiting');
+});
+test('uncertain retry whose composer was later cleared waits instead of inserting again',async()=>{
+  const h=harness();h.io.send=async(id,p)=>{h.sent.push({id,...p});return {ok:false,retryableDraft:true};};
+  await h.e.begin(h.config);await h.e.tick();assert.equal(h.e.run.status,'paused');
+  await h.e.resume();await h.e.tick();assert.equal(h.sent.length,1);assert.equal(h.e.run.pending.phase,'waiting');
+});

@@ -15,10 +15,10 @@ function page(host, html) {
     getComputedStyle:()=>({visibility:'visible'}),setTimeout:fn=>setImmediate(fn),console,
     chrome:{runtime:{id:'relay',onMessage:{addListener:fn=>receive=fn}}}
   });
-  for(const name of ['adapters.js','content.js']) vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../extension',name),'utf8'),context);
+  for(const name of ['adapters.js','editor.js','content.js']) vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../extension',name),'utf8'),context);
   const sendButton=window.document.querySelector('[data-send]');
   sendButton?.addEventListener('click',()=>{clicks++;});
-  return {document:window.document,clicks:()=>clicks,message:msg=>new Promise(resolve=>receive(msg,{id:'relay'},resolve))};
+  return {document:window.document,window,clicks:()=>clicks,message:msg=>new Promise(resolve=>receive(msg,{id:'relay'},resolve))};
 }
 test('Kimi collects all final answer blocks and excludes thinking blocks',async()=>{
   const p=page('www.kimi.com','<div class="chat-input-editor" contenteditable="true"></div><div class="send-button-container disabled"></div><div class="segment-assistant"><div class="thinking-container"><div class="markdown">思考中，不应送审</div></div><div class="markdown">答案第一段</div><div class="markdown">答案第二段【接力结束_test】</div></div>');
@@ -57,4 +57,63 @@ test('reuses this task exact prefilled prompt and clicks the current ChatGPT sub
   p.document.querySelector('[data-send]').addEventListener('click',ev=>{ev.preventDefault();p.document.querySelector('textarea').value='';});
   const result=await p.message({type:'RELAY_SEND',taskId:'resume',runId:'run',prompt:'审核提示'});
   assert.equal(result.ok,true);assert.equal(result.verified,true);assert.equal(p.clicks(),1);
+});
+test('long contenteditable paragraphs preserve blank lines, indentation and Markdown before send',async()=>{
+  const E=require('../extension/editor.js');
+  const lines=['【审核任务】','',...Array.from({length:80},(_,i)=>`第 ${i} 段：中文 / English **Markdown**`),'','```js','  const x = 1;','```','【接力结束_long】'];
+  const prompt=lines.join('\n');
+  const p=page('chatgpt.com','<form><div id="prompt-textarea" contenteditable="true"></div><button id="composer-submit-button" data-send></button></form>');
+  const box=p.document.querySelector('#prompt-textarea');
+  for(const line of lines){const para=p.document.createElement('p');if(line)para.textContent=line;else para.innerHTML='<br class="ProseMirror-trailingBreak">';box.append(para);}
+  // Browser innerText is layout dependent; the editor document is not.
+  Object.defineProperty(box,'innerText',{get:()=>lines.join('\n\n')});
+  assert.equal(E.read(box),prompt);
+  const snap=await p.message({type:'RELAY_SNAPSHOT'});assert.equal(snap.draft,prompt);assert.equal(snap.protocol,2);
+  p.document.querySelector('[data-send]').addEventListener('click',()=>{box.replaceChildren();});
+  const result=await p.message({type:'RELAY_SEND',taskId:'long',runId:'run',prompt});
+  assert.equal(result.ok,true);assert.equal(p.clicks(),1);
+});
+test('fresh contenteditable insertion sends multiline text without a duplicate input event',async()=>{
+  const p=page('chatgpt.com','<form><div id="prompt-textarea" contenteditable="true"><p><br></p></div><button id="composer-submit-button" data-send></button></form>');
+  const box=p.document.querySelector('#prompt-textarea');
+  const prompt='第一段\n\n第二段\n  保留缩进\n【接力结束_new】';
+  let inputs=0, submitted='';
+  box.addEventListener('input',()=>inputs++);
+  p.document.createRange=()=>({selectNodeContents(){}});
+  p.window.getSelection=()=>({removeAllRanges(){},addRange(){}});
+  // Simulate the editor's native insertText transaction and paragraph output.
+  p.document.execCommand=(command,ui,text)=>{
+    assert.equal(command,'insertText');box.replaceChildren();
+    for(const line of text.split('\n')) { const para=p.document.createElement('p');if(line)para.textContent=line;else para.innerHTML='<br>';box.append(para); }
+    box.dispatchEvent(new p.window.Event('input',{bubbles:true}));return true;
+  };
+  p.document.querySelector('[data-send]').addEventListener('click',()=>{submitted=require('../extension/editor.js').read(box);box.replaceChildren();});
+  const result=await p.message({type:'RELAY_SEND',taskId:'new',runId:'run',prompt});
+  assert.equal(result.ok,true);assert.equal(submitted,prompt);assert.equal(inputs,1);assert.equal(p.clicks(),1);
+});
+test('a changed draft containing the marker is protected',async()=>{
+  const p=page('chatgpt.com','<textarea id="prompt-textarea">用户改过的内容【接力结束_test】</textarea><button id="composer-submit-button" data-send></button>');
+  const result=await p.message({type:'RELAY_SEND',taskId:'changed',runId:'run',marker:'【接力结束_test】',prompt:'原来内容【接力结束_test】'});
+  assert.equal(result.beforeClick,true);assert.equal(p.clicks(),0);
+});
+test('composer removal is uncertain and cancellation cannot trigger fallback submissions',async()=>{
+  for(const mode of ['removed','cancelled']) {
+    const p=page('chatgpt.com','<form><textarea id="prompt-textarea"></textarea><button id="composer-submit-button" data-send></button></form>');
+    let fallbacks=0;
+    p.document.querySelector('form').requestSubmit=()=>fallbacks++;
+    p.document.querySelector('textarea').addEventListener('keydown',()=>fallbacks++);
+    p.document.querySelector('[data-send]').addEventListener('click',()=>{
+      if(mode==='removed')p.document.querySelector('textarea').remove();
+      else p.message({type:'RELAY_CANCEL',runId:'run'});
+    });
+    const result=await p.message({type:'RELAY_SEND',taskId:mode,runId:'run',prompt:'测试内容'});
+    assert.equal(result.ok,false);assert.equal(result.retryableDraft,false);assert.equal(p.clicks(),1);assert.equal(fallbacks,0);
+  }
+});
+test('draft edited while send button is enabling is never sent',async()=>{
+  const p=page('chatgpt.com','<textarea id="prompt-textarea"></textarea><button id="composer-submit-button" disabled data-send></button>');
+  const box=p.document.querySelector('textarea');
+  box.addEventListener('input',()=>setImmediate(()=>setImmediate(()=>{box.value='后来修改的内容';p.document.querySelector('[data-send]').disabled=false;})));
+  const result=await p.message({type:'RELAY_SEND',taskId:'race',runId:'run',prompt:'原始内容'});
+  assert.equal(result.beforeClick,true);assert.equal(p.clicks(),0);assert.equal(box.value,'后来修改的内容');
 });
