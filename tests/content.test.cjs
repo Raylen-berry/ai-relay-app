@@ -77,7 +77,7 @@ test('long contenteditable paragraphs preserve blank lines, indentation and Mark
   // Browser innerText is layout dependent; the editor document is not.
   Object.defineProperty(box,'innerText',{get:()=>lines.join('\n\n')});
   assert.equal(E.read(box),prompt);
-  const snap=await p.message({type:'RELAY_SNAPSHOT'});assert.equal(snap.draft,prompt);assert.equal(snap.protocol,3);
+  const snap=await p.message({type:'RELAY_SNAPSHOT'});assert.equal(snap.draft,prompt);assert.equal(snap.protocol,4);
   p.document.querySelector('[data-send]').addEventListener('click',()=>{box.replaceChildren();});
   const result=await p.message({type:'RELAY_SEND',taskId:'long',runId:'run',prompt});
   assert.equal(result.ok,true);assert.equal(p.clicks(),1);
@@ -168,4 +168,77 @@ test('Kimi legacy recovery rejects every other text change, foreign marker and m
     assert.equal(result.beforeClick,true);assert.equal(p.clicks(),0);assert.equal(p.box.textContent,draft);
   }
   assert.equal(require('../extension/editor.js').lostLineBreaks(prompt.replace(/\n/g,''),prompt,''),false);
+});
+// Composer structures observed in Edge on 2026-09-23 (no conversation content).
+const filePages = {
+  'www.kimi.com': {html:'<div class="chat-editor"><div data-testid="input-attachment-list"></div><div class="chat-input-editor" contenteditable="true" data-lexical-editor="true"></div><div class="send-button-container" data-send></div></div>', root:'[data-testid="input-attachment-list"]', card:'<div class="file-card-container normal"><p class="file-card-info-name">relay.txt</p><div class="file-card-info-status">TXT 7.27 KB</div></div>', box:'.chat-input-editor'},
+  'chatgpt.com': {html:'<form><div id="files"></div><textarea id="prompt-textarea"></textarea><button id="composer-submit-button" data-send></button></form>',root:'#files',card:'<div class="group/file-tile" role="group" aria-label="relay.txt"><span>relay.txt</span><button aria-label="Remove file"></button></div>',box:'textarea'},
+  'chat.deepseek.com': {html:'<div class="_77cefa5"><div id="files"></div><textarea placeholder="DeepSeek"></textarea><div class="ds-button--primary ds-button--circle" data-send></div></div>',root:'#files',card:'<div class="_25c7358"><div class="e70accd6">relay.txt</div><button>粘贴原文至输入框</button></div>',box:'textarea'}
+};
+function filePage(host) {
+  const f=filePages[host],p=page(host,f.html),box=p.document.querySelector(f.box),root=p.document.querySelector(f.root);
+  p.document.createRange=()=>({selectNodeContents(){}});p.window.getSelection=()=>({removeAllRanges(){},addRange(){}});
+  return {...p,box,root,attach:()=>{root.innerHTML=f.card;return root.firstElementChild;}};
+}
+for(const host of Object.keys(filePages)) {
+  test(host+' sends an attachment-only composer, waits for clearing, and ignores history files',async()=>{
+    const p=filePage(host);p.attach();
+    p.document.body.insertAdjacentHTML('afterbegin',filePages[host].card);
+    const snap=await p.message({type:'RELAY_SNAPSHOT'});
+    assert.equal(snap.attachments.count,1);assert.equal(snap.inputOccupied,true);assert.equal(snap.busy,false);
+    p.document.querySelector('[data-send]').addEventListener('click',()=>setImmediate(()=>p.root.replaceChildren()));
+    const result=await p.message({type:'RELAY_SEND',taskId:'file',runId:'run',prompt:'long prompt',attachmentSignature:snap.attachments.signature});
+    assert.equal(result.ok,true);assert.equal(result.attachment,true);assert.equal(p.clicks(),1);assert.equal(p.root.children.length,0);
+  });
+  test(host+' does not treat an empty editor with a retained attachment as delivered',async()=>{
+    const p=filePage(host);p.attach();const snap=await p.message({type:'RELAY_SNAPSHOT'});
+    const result=await p.message({type:'RELAY_SEND',taskId:'stuck-file',runId:'run',prompt:'long prompt',attachmentSignature:snap.attachments.signature});
+    assert.equal(result.ok,false);assert.equal(result.retryableDraft,true);assert.equal(p.clicks(),1);
+  });
+  test(host+' waits for parsing, then submits exactly once',async()=>{
+    const p=filePage(host),card=p.attach(),progress=p.document.createElement('div');
+    progress.setAttribute('role','progressbar');progress.className='parsing';card.append(progress);
+    const snap=await p.message({type:'RELAY_SNAPSHOT'});assert.equal(snap.attachments.pending,true);
+    setImmediate(()=>setImmediate(()=>{assert.equal(p.clicks(),0);progress.remove();}));
+    p.document.querySelector('[data-send]').addEventListener('click',()=>p.root.replaceChildren());
+    assert.equal((await p.message({type:'RELAY_SEND',taskId:'parsing',runId:'run',prompt:'long prompt',attachmentSignature:snap.attachments.signature})).ok,true);
+    assert.equal(p.clicks(),1);
+  });
+}
+test('Kimi paste converting to TXT continues without rewriting or a text-equality failure',async()=>{
+  const p=filePage('www.kimi.com');let pastes=0;
+  p.box.addEventListener('paste',()=>{pastes++;p.attach();});
+  p.document.querySelector('[data-send]').addEventListener('click',()=>p.root.replaceChildren());
+  const result=await p.message({type:'RELAY_SEND',taskId:'convert',runId:'run',prompt:'中文长材料\n'.repeat(600)});
+  assert.equal(result.ok,true);assert.equal(result.attachment,true);assert.equal(pastes,1);assert.equal(p.clicks(),1);
+});
+test('unknown existing attachment, changed draft, upload failure and cancellation never send',async()=>{
+  for(const mode of ['foreign','text','failed','cancel','replaced']) {
+    const p=filePage('www.kimi.com'),card=p.attach();const snap=await p.message({type:'RELAY_SNAPSHOT'});
+    if(mode==='text')p.box.textContent='用户编辑过的内容';
+    if(mode==='failed')card.classList.add('failed');
+    if(mode==='replaced')card.querySelector('p').textContent='changed.txt';
+    if(mode==='cancel')await p.message({type:'RELAY_CANCEL',runId:'run'});
+    const result=await p.message({type:'RELAY_SEND',taskId:mode,runId:'run',prompt:'long prompt',attachmentSignature:mode==='foreign'?undefined:snap.attachments.signature});
+    assert.equal(result.beforeClick,true);assert.equal(p.clicks(),0);
+  }
+});
+test('attachment parsing timeout preserves the draft for an explicit resume',async()=>{
+  const p=filePage('www.kimi.com');p.attach().classList.add('parsing');const s=await p.message({type:'RELAY_SNAPSHOT'});
+  const r=await p.message({type:'RELAY_SEND',taskId:'timeout',runId:'run',prompt:'long prompt',attachmentSignature:s.attachments.signature});
+  assert.equal(r.beforeClick,true);assert.equal(r.draftRetained,true);assert.match(r.error,/仍在上传或解析/);assert.equal(p.clicks(),0);
+});
+for(const host of ['chatgpt.com','chat.deepseek.com']) test(host+' accepts a text editor update converted into an attachment',async()=>{
+  const p=filePage(host),button=p.document.querySelector('[data-send]');button.disabled=true;
+  p.box.addEventListener('input',()=>{p.box.value='';p.attach();button.disabled=false;});
+  button.addEventListener('click',()=>p.root.replaceChildren());
+  const result=await p.message({type:'RELAY_SEND',taskId:'converted',runId:'run',prompt:'long material'});
+  assert.equal(result.ok,true);assert.equal(result.attachment,true);assert.equal(p.clicks(),1);
+});
+test('attachment replaced while waiting for the send button is not submitted',async()=>{
+  const p=filePage('www.kimi.com');const card=p.attach(),button=p.document.querySelector('[data-send]');button.classList.add('disabled');
+  const s=await p.message({type:'RELAY_SNAPSHOT'});
+  setImmediate(()=>{card.querySelector('p').textContent='changed.txt';button.classList.remove('disabled');});
+  const r=await p.message({type:'RELAY_SEND',taskId:'changed-file',runId:'run',prompt:'long material',attachmentSignature:s.attachments.signature});
+  assert.equal(r.beforeClick,true);assert.equal(p.clicks(),0);
 });

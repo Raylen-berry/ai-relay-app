@@ -4,12 +4,35 @@
   const E = typeof module !== 'undefined' ? require('./editor.js') : root.RelayEditor;
   const pieceAt = pending => pending.parts?.[pending.partIndex || 0] || {prompt: pending.prompt, marker: null};
   const samePrompt = (draft, pending) => E.same(draft, pieceAt(pending).prompt);
+  const emptyTime = () => ({send:0, wait:0, paused:0});
+  function accrue(t, now) {
+    if (!t || t.finishedAt != null) return;
+    const row = t.index < 0 ? t.setup : (t.rounds[t.index] ||= emptyTime());
+    row[t.mode] += Math.max(0, now - t.checkpoint);
+    t.checkpoint = now;
+  }
   class RelayEngine {
     constructor(io, changed, now = Date.now, uid = () => crypto.randomUUID()) {
       this.io = io; this.changed = changed; this.now = now; this.uid = uid;
       this.run = null; this.locked = false; this.observation = null;
     }
-    async save() { await this.changed(this.run); }
+    clock() {
+      const r = this.run, t = r?.timing;
+      if (!t || t.finishedAt != null) return;
+      accrue(t, this.now());
+      t.index = r.stageIndex === 0 && !r.pending ? -1 : r.stageIndex;
+      t.mode = r.status === 'paused' ? 'paused' : ['waiting','waitingPart','dispatching'].includes(r.pending?.phase) ? 'wait' : 'send';
+      // Dispatching includes upload/parsing and confirmation of the click.
+      if (r.pending?.phase === 'dispatching' && r.status !== 'paused') t.mode = 'send';
+      if (r.status === 'done') t.finishedAt = this.now();
+    }
+    static timing(run, now = Date.now()) {
+      if (!run?.timing) return null;
+      const t = structuredClone(run.timing); accrue(t, now);
+      const totals = [t.setup, ...t.rounds.filter(Boolean)].reduce((a,b) => ({send:a.send+b.send, wait:a.wait+b.wait, paused:a.paused+b.paused}), emptyTime());
+      return {...t, ...totals, total:totals.send + totals.wait + totals.paused};
+    }
+    async save() { this.clock(); await this.changed(this.run); }
     log(text) {
       this.run.logs.push({at: this.now(), text});
       this.run.logs = this.run.logs.slice(-100);
@@ -19,7 +42,8 @@
       if (this.locked || this.run?.status === 'running') throw new Error('已有任务正在运行。');
       this.run = {
         ...structuredClone(config), route: C.routeFor(config), id: this.uid(), status: 'running', stageIndex: 0,
-        outputs: {}, turns: [], finalOut: '', tabs: {}, pending: null, logs: [], error: '', created: this.now()
+        outputs: {}, turns: [], finalOut: '', tabs: {}, pending: null, logs: [], error: '', created: this.now(),
+        timing:{startedAt:this.now(), checkpoint:this.now(), mode:'send', index:-1, setup:emptyTime(), rounds:[]}
       };
       this.log('任务已创建：' + this.run.route.map(role => C.providers[this.run[role]].name).join(' → ') + '。');
       await this.save();
@@ -29,9 +53,16 @@
       if (this.run && !this.run.route) this.run.route = ['primary','reviewer','primary'];
       if (this.run && !this.run.turns) this.run.turns = [this.run.outputs?.first, this.run.outputs?.review].filter(Boolean);
       if (this.run?.status === 'running') {
+        // Closed-window time is separate from measured automatic processing.
+        if (this.run.timing) this.run.timing.mode = 'paused';
         this.run.status = 'paused';
         this.run.error = '窗口曾关闭或刷新。点击继续后先检查当前步骤，不会重复发送已尝试发送的消息。';
       }
+      if (this.run && !this.run.timing && this.run.status !== 'done') {
+        this.run.timing = {startedAt:this.now(), checkpoint:this.now(), mode:'paused', index:this.run.stageIndex,
+          setup:emptyTime(), rounds:[], partial:true};
+      }
+      this.clock();
       this.observation = null;
     }
     async pause(reason = '已停止自动接力。网页上已发出的生成可能仍在继续；继续时会先读取结果。') {
@@ -152,10 +183,12 @@
           if (!snap.input) throw new Error('未找到网页输入框，请完成登录后继续。');
           if (snap.busy) throw new Error('网页正在生成，请等待完成后继续。');
           const repairDraft = this.run[role] === 'kimi' && E.lostLineBreaks(snap.draft, piece.prompt, currentMarker);
-          if (snap.inputOccupied && !samePrompt(snap.draft, p) && !repairDraft) {
+          const attachedDraft = snap.attachments?.count > 0 && (!E.normalize(snap.draft) || samePrompt(snap.draft, p));
+          if (snap.inputOccupied && !samePrompt(snap.draft, p) && !repairDraft && !attachedDraft) {
             throw new Error('网页输入框已有其他文字，请检查后清空输入框再继续。');
           }
           if (repairDraft) this.log('检测到旧版遗留的本轮草稿，将恢复换行并核对全文后发送。');
+          else if (attachedDraft) this.log('检测到当前任务输入框中的附件，等待解析完成后发送。');
           else if (snap.inputOccupied) this.log('检测到当前步骤已填入的完整提示词，继续尝试发送。');
           await this.io.activate(tab.id);
           if (!this.active()) return;
@@ -165,7 +198,8 @@
           await this.save();
           if (!this.active()) {p.phase = 'prepared'; await this.save(); return;}
           let ack;
-          try { ack = await this.io.send(tab.id, {...p, taskId:p.taskId + ':' + (p.partIndex || 0), prompt:piece.prompt, marker:currentMarker, runId: this.run.id}); }
+          try { ack = await this.io.send(tab.id, {...p, taskId:p.taskId + ':' + (p.partIndex || 0), prompt:piece.prompt, marker:currentMarker, runId: this.run.id,
+            attachmentSignature:attachedDraft ? snap.attachments.signature : undefined}); }
           catch { throw new Error('发送状态未能确认。请检查任务网页；继续只会等待结果，不会重复点击发送。'); }
           if (!ack.ok) {
             if (ack.beforeClick || ack.retryableDraft) {
@@ -174,6 +208,7 @@
             throw new Error(ack.error || '发送未完成，请检查任务页面。');
           }
           p.phase = waitingPart ? 'waitingPart' : 'waiting';
+          if (ack.attachment) this.log('TXT / 文件附件已发送，网页已确认接收。');
           this.log(waitingPart ? `已发送材料第 ${p.partIndex + 1}/${p.parts.length} 段，等待确认。` : '已点击发送，等待完整回答。'); await this.save();
           return;
         }
@@ -190,7 +225,7 @@
           await this.complete(C.stripMarker(this.observation.text, p.marker));
         } else if (this.now() - p.started > this.run.timeout * 60000) {
           throw new Error('等待超时，或网页没有输出结束标记。请检查网页；可以继续等待，也可以粘贴完整回答后接着运行。');
-        }
+        } else await this.save();
       } catch (e) {
         if (this.run && this.active()) await this.pause(e.message);
         else if (this.run) await this.save();

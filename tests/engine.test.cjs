@@ -164,3 +164,28 @@ test('manual takeover and handoff resume receipt collection without resending',a
   assert.equal(h.sent.length,prior);assert.equal(h.e.run.pending.phase,'waiting');
   await answer(h,'用户手动取得的初稿');assert.equal(h.e.run.outputs.first,'用户手动取得的初稿');
 });
+
+test('resumes a task attachment instead of mistaking the empty text for a sent prompt',async()=>{
+  const h=harness();h.io.send=async(id,p)=>{h.sent.push({id,...p});return {ok:false,beforeClick:true,draftRetained:true,error:'parsing'};};
+  await h.e.begin(h.config);await h.e.tick();assert.equal(h.e.run.status,'paused');
+  const tab=h.tabs.get(h.e.run.tabs.primary.id);tab.attachments={count:1,signature:'["relay.txt"]'};tab.inputOccupied=true;
+  h.io.send=async(id,p)=>{h.sent.push({id,...p});return {ok:true,attachment:true};};
+  await h.e.resume();await h.e.tick();assert.equal(h.sent.length,2);assert.equal(h.sent[1].attachmentSignature,'["relay.txt"]');
+  assert.equal(h.e.run.pending.phase,'waiting');
+});
+test('timing separates send, answer wait and pause; finished totals freeze and rows add up',async()=>{
+  const h=harness(),send=h.io.send;h.io.send=async(...args)=>{h.advance(2000);return send(...args);};
+  await h.e.begin(h.config);h.advance(1000);await h.e.tick();
+  h.advance(3000);await h.e.pause();h.advance(5000);await h.e.resume();await answer(h,'first');
+  await h.e.tick();await answer(h,'review');await h.e.tick();await answer(h,'【最终答案】done');
+  const t=Engine.timing(h.e.run,h.e.now());
+  assert.equal(t.setup.send,1000);assert.equal(t.rounds[0].send,2000);assert.equal(t.rounds[0].wait,10000);assert.equal(t.rounds[0].paused,5000);
+  assert.equal(t.send,7000);assert.equal(t.wait,24000);assert.equal(t.paused,5000);assert.equal(t.total,36000);
+  h.advance(60000);assert.deepEqual(Engine.timing(h.e.run,h.e.now()),t);
+});
+test('reloading keeps recorded timing and counts closed-window time as pause',async()=>{
+  const h=harness();await h.e.begin(h.config);await h.e.tick();h.advance(4000);await h.e.save();
+  const saved=structuredClone(h.e.run);h.advance(10000);h.e.restore(saved);
+  const t=Engine.timing(h.e.run,h.e.now());assert.equal(t.wait,4000);assert.equal(t.paused,10000);assert.equal(t.total,14000);
+  await h.e.resume();h.advance(1000);await h.e.save();assert.equal(Engine.timing(h.e.run,h.e.now()).wait,5000);
+});

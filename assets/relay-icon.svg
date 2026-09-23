@@ -1,21 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="night" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#123c53"/><stop offset="1" stop-color="#092632"/></linearGradient>
-    <linearGradient id="left" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#5ce5dc"/><stop offset="1" stop-color="#168da1"/></linearGradient>
-    <linearGradient id="right" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#d5c1ff"/><stop offset="1" stop-color="#8778e5"/></linearGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#174E48"/><stop offset="1" stop-color="#092E32"/></linearGradient>
+    <linearGradient id="flow" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#B9F7E5"/><stop offset="1" stop-color="#57D9B7"/></linearGradient>
   </defs>
-  <rect x="8" y="8" width="496" height="496" rx="120" fill="url(#night)"/>
-  <rect x="13" y="13" width="486" height="486" rx="115" fill="none" stroke="#8ce8db" stroke-opacity=".19" stroke-width="3"/>
-  <rect x="58" y="141" width="128" height="230" rx="38" fill="url(#left)"/>
-  <rect x="326" y="141" width="128" height="230" rx="38" fill="url(#right)"/>
-  <path d="M108 103v34m-25-16h50M379 103v34m-25-16h50M108 376v34m-25-16h50M379 376v34m-25-16h50" stroke="#b8eae4" stroke-opacity=".65" stroke-width="10" stroke-linecap="round"/>
-  <path d="m122 186 12 37 37 12-37 12-12 37-12-37-37-12 37-12z" fill="#073141"/>
-  <circle cx="148" cy="294" r="9" fill="#073141"/><circle cx="97" cy="296" r="7" fill="#073141"/>
-  <path d="m389 186 12 37 37 12-37 12-12 37-12-37-37-12 37-12z" fill="#232755"/>
-  <circle cx="414" cy="294" r="9" fill="#232755"/><circle cx="364" cy="296" r="7" fill="#232755"/>
-  <path d="M195 207h108" stroke="#79ece3" stroke-width="25" stroke-linecap="round"/>
-  <path d="m278 176 31 31-31 31" fill="none" stroke="#79ece3" stroke-width="25" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M317 305H209" stroke="#e2ceff" stroke-width="25" stroke-linecap="round"/>
-  <path d="m234 274-31 31 31 31" fill="none" stroke="#e2ceff" stroke-width="25" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="226" cy="207" r="7" fill="#fff"/><circle cx="286" cy="305" r="7" fill="#fff"/>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect x="2" y="2" width="508" height="508" rx="110" fill="none" stroke="#FFFFFF" stroke-opacity=".1" stroke-width="4"/>
+  <path d="M106 213A157 157 0 0 1 389 178" fill="none" stroke="url(#flow)" stroke-width="25" stroke-linecap="round"/>
+  <path d="M409 216 346 190 400 154Z" fill="#66DEBF" stroke="#66DEBF" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M406 299A157 157 0 0 1 123 334" fill="none" stroke="#EBF9F4" stroke-width="25" stroke-linecap="round"/>
+  <path d="M103 296 166 322 112 358Z" fill="#EBF9F4" stroke="#EBF9F4" stroke-width="7" stroke-linejoin="round"/>
+  <!-- Vector lettering keeps the same shape in Windows and browsers. -->
+  <path d="M155 305 194 201H223L262 305H232L225 283H190L183 305ZM197 261H219L208 226Z" fill="#F5FFFA" fill-rule="evenodd"/>
+  <path d="M278 201H307V305H278Z" fill="#F5FFFA"/>
+  <path d="M353 204 325 257H347L337 301 376 242H353L365 204Z" fill="#F4CE73" stroke="#F4CE73" stroke-width="3" stroke-linejoin="round"/>
 </svg>

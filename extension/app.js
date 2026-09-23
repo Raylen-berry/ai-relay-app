@@ -39,10 +39,37 @@ function message(text, error = false) {
   $('status').textContent = text;
   if (error) { $('error').textContent = text; $('error').hidden = false; }
 }
+function duration(ms) {
+  const seconds = Math.floor(Math.max(0, ms) / 1000);
+  const h = Math.floor(seconds / 3600), m = Math.floor(seconds % 3600 / 60), s = seconds % 60;
+  return (h ? h + ':' : '') + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+}
+function renderTiming(r) {
+  const t = RelayEngine.timing(r);
+  $('timing').hidden = !t;
+  if (!t) return;
+  $('totalTime').textContent = duration(t.total);
+  $('activeTime').textContent = duration(t.send + t.wait);
+  $('pausedTime').textContent = duration(t.paused);
+  $('timingNote').textContent = (t.partial ? '旧任务从本次升级后开始计时。' : '') +
+    '总用时包含暂停及窗口关闭时间。准备与发送包含附件解析；等待回答包含分段确认和生成。';
+  const body = $('timingRows'); body.replaceChildren();
+  const add = (label,row) => {
+    const tr = document.createElement('tr');
+    for (const text of [label, row ? duration(row.send + row.wait + row.paused) : '未开始',
+      row ? duration(row.send) : '—', row ? duration(row.wait) : '—', row ? duration(row.paused) : '—']) {
+      const td = document.createElement('td'); td.textContent = text; tr.append(td);
+    }
+    body.append(tr);
+  };
+  add('打开与检查网页',t.setup);
+  r.route.forEach((role,i) => add(`${i+1} · ${C.providers[r[role]].name} · ${i===0?'初稿':i===r.route.length-1?'定稿':'审核'}`,t.rounds[i]));
+}
 function render() {
   const r = engine?.run;
   const running = r?.status === 'running';
   const paused = r?.status === 'paused';
+  renderTiming(r);
   for (const id of ['question','primary','reviewer','third','sequence','timeout','templateFirst','templateReview','templateFinal','resetTemplates']) $(id).disabled = running || lockedElsewhere || engine?.locked;
   $('import').disabled = running || lockedElsewhere || engine?.locked;
   $('newTask').disabled = running || lockedElsewhere || engine?.locked;
@@ -118,7 +145,7 @@ const io = {
       if (engine.run?.status !== 'running' && i > 0) throw new Error('等待连接已停止。');
       try {
         const data = await chrome.tabs.sendMessage(id, {type: 'RELAY_SNAPSHOT'});
-        if (data?.ok && data.protocol !== 3) {
+        if (data?.ok && data.protocol !== 4) {
           const error = new Error(C.providers[provider].name + ' 页面仍在使用旧版连接脚本。请刷新这个模型任务页面，再点继续；只重新加载扩展还不够。');
           error.relayUpdate = true; throw error;
         }
