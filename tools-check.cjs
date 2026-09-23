@@ -3,6 +3,7 @@ const fs = require('node:fs'), path = require('node:path'), vm = require('node:v
 const dir = path.join(__dirname, 'extension');
 const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
 assert.equal(manifest.version, require('./package.json').version);
+assert.ok(fs.existsSync(path.join(__dirname,'assets','relay-'+manifest.version+'.ico')),'Missing versioned Windows shortcut icon');
 for (const file of fs.readdirSync(dir).filter(f => f.endsWith('.js'))) {
   new vm.Script(fs.readFileSync(path.join(dir, file), 'utf8'), {filename: file});
 }

@@ -2,7 +2,7 @@
 const C = RelayCore;
 const $ = id => document.getElementById(id);
 const isExtension = !!globalThis.chrome?.runtime?.id && !!chrome.storage;
-const defaultConfig = () => ({q: '', primary: 'deepseek', reviewer: 'chatgpt', timeout: 15, templates: {...C.templates}});
+const defaultConfig = () => ({q: '', primary: 'deepseek', reviewer: 'chatgpt', third:'kimi', sequence:'1-2-1', timeout: 15, templates: {...C.templates}});
 let config = defaultConfig();
 let imported = null;
 // Disable writes until this window owns the runner, including during startup.
@@ -15,10 +15,12 @@ let transient = null;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 function readForm() {
   config = {q: $('question').value, primary: $('primary').value, reviewer: $('reviewer').value,
+    third:$('third').value, sequence:$('sequence').value,
     timeout: Number($('timeout').value), templates: {first: $('templateFirst').value, review: $('templateReview').value, final: $('templateFinal').value}};
 }
 function populateForm() {
   $('question').value = config.q; $('primary').value = config.primary; $('reviewer').value = config.reviewer;
+  $('third').value = config.third || 'kimi'; $('sequence').value = config.sequence || '1-2-1';
   if (![...$('timeout').options].some(o => o.value === String(config.timeout))) config.timeout = 15;
   $('timeout').value = config.timeout;
   $('templateFirst').value = config.templates.first; $('templateReview').value = config.templates.review; $('templateFinal').value = config.templates.final;
@@ -41,7 +43,7 @@ function render() {
   const r = engine?.run;
   const running = r?.status === 'running';
   const paused = r?.status === 'paused';
-  for (const id of ['question','primary','reviewer','timeout','templateFirst','templateReview','templateFinal','resetTemplates']) $(id).disabled = running || lockedElsewhere || engine?.locked;
+  for (const id of ['question','primary','reviewer','third','sequence','timeout','templateFirst','templateReview','templateFinal','resetTemplates']) $(id).disabled = running || lockedElsewhere || engine?.locked;
   $('import').disabled = running || lockedElsewhere || engine?.locked;
   $('newTask').disabled = running || lockedElsewhere || engine?.locked;
   $('export').disabled = lockedElsewhere;
@@ -52,6 +54,8 @@ function render() {
   $('start').textContent = r ? '开始新互审 ↗' : '开始互审 ↗';
   $('pause').disabled = !running || lockedElsewhere;
   $('resume').disabled = !paused || engine?.locked || lockedElsewhere;
+  $('takeover').disabled = !r || r.status === 'done' || engine?.locked || lockedElsewhere;
+  $('manualSent').disabled = !paused || !r?.pending || engine?.locked || lockedElsewhere;
   $('acceptManual').disabled = !paused || engine?.locked || lockedElsewhere;
   $('copyPrompt').disabled = !r || r.status === 'done';
   $('clear').disabled = running || engine?.locked || lockedElsewhere;
@@ -59,20 +63,27 @@ function render() {
   $('charCount').textContent = config.q.length.toLocaleString() + ' 字';
   const output = r?.outputs || imported?.outputs || {};
   $('firstOut').value = output.first || '';
-  $('reviewOut').value = output.review || '';
+  const reviews = r?.turns?.slice(1, r.status === 'done' ? -1 : undefined) || [];
+  $('reviewOut').value = reviews.length ? reviews.map((text,i) => `第 ${i + 2} 轮 · ${C.providers[r[r.route[i + 1]]].name}\n${text}`).join('\n\n') : output.review || '';
   $('lastOut').value = output.final || '';
   $('finalOut').value = r?.finalOut || imported?.finalOut || '';
   $('resultLabel').textContent = r?.status === 'done' ? '已完成' : running ? '处理中' : paused ? '等待接续' : imported?.previous ? '上次结果' : imported ? '已导入' : '等待开始';
   const states = {running: '进行中', paused: '已暂停', done: '已完成'};
-  $('status').textContent = r ? states[r.status] + ' · ' + (C.labels[C.stages[r.stageIndex]] || '最终结果已保存') : '就绪 · 输入问题后，点击「开始互审」';
+  $('status').textContent = r ? states[r.status] + ' · ' + (r.status === 'done' ? '最终结果已保存' : `第 ${r.stageIndex + 1}/${r.route.length} 轮 · ${C.providers[r[r.route[r.stageIndex]]].name} · ${C.labels[C.stageAt(r)]}`) : '就绪 · 输入问题后，点击「开始互审」';
+  if (r?.pending?.parts?.length > 1 && r.status !== 'done') $('status').textContent += ` · 材料 ${r.pending.partIndex + 1}/${r.pending.parts.length}`;
   $('error').textContent = r?.error || '';
   $('error').hidden = !r?.error;
   $('logs').textContent = (r?.logs || []).map(x => new Date(x.at).toLocaleTimeString() + '  ' + x.text).join('\n');
-  for (const span of document.querySelectorAll('[data-stage]')) {
-    const i = Number(span.dataset.stage);
-    span.classList.toggle('active', !!r && i === r.stageIndex);
-    span.classList.toggle('complete', !!r && i < r.stageIndex);
-  }
+  const progress = $('steps'); progress.replaceChildren();
+  const route = r?.route || (() => {try {return C.routeFor(config);} catch {return ['primary','reviewer','primary'];}})();
+  $('showThird').hidden = !route.includes('third');
+  route.forEach((role,i) => {
+    if (i) {const arrow=document.createElement('i');arrow.textContent='→';progress.append(arrow);}
+    const span=document.createElement('span');span.textContent=`${i + 1} ${C.providers[(r || config)[role]]?.name || '待选模型'}`;
+    span.classList.toggle('active',!!r && i===r.stageIndex && r.status!=='done');
+    span.classList.toggle('complete',!!r && (i<r.stageIndex || r.status==='done'));
+    progress.append(span);
+  });
   if (transient && transient.until > Date.now()) {
     $('status').textContent = transient.text;
     if (transient.error) {$('error').textContent = transient.text; $('error').hidden = false;}
@@ -99,6 +110,7 @@ const io = {
     await chrome.tabs.update(id, {active: true});
     await chrome.windows.update(tab.windowId, {focused: true});
   },
+  close: id => chrome.tabs.remove(id),
   async snapshot(id, provider) {
     await checkedTab(id, provider);
     // Newly created pages need time to attach their declarative content script.
@@ -151,9 +163,9 @@ async function initialize() {
   populateForm(); render();
   $('previewNotice').hidden = isExtension;
   $('modeBadge').textContent = isExtension ? '本地保存' : '界面预览';
-  for (const id of ['question','primary','reviewer','timeout','templateFirst','templateReview','templateFinal']) {
+  for (const id of ['question','primary','reviewer','third','sequence','timeout','templateFirst','templateReview','templateFinal']) {
     $(id).addEventListener('input', () => {
-      readForm(); $('charCount').textContent = config.q.length.toLocaleString() + ' 字';
+      readForm(); render();
       clearTimeout(saveTimer); saveTimer = setTimeout(() => store().catch(e => message('保存失败：' + e.message, true)), 300);
     });
   }
@@ -186,20 +198,22 @@ async function initialize() {
   });
   bind('pause', async () => {await engine.pause(); render();});
   bind('resume', async () => {await engine.resume(); await engine.tick(); render();});
+  bind('takeover', async () => {await engine.takeover(); render(); message('已打开本轮网页。可复制待发内容手动发送，或直接粘贴本轮完整回答跳到下一轮。');});
+  bind('manualSent', async () => {await engine.markManualSent(); await engine.resume(); await engine.tick(); render();});
   bind('copyFinal', () => copy($('finalOut').value));
   bind('copyPrompt', async () => {
     const r = engine.run; if (!r) return;
-    const stage = C.stages[r.stageIndex];
+    const stage = C.stageAt(r);
     const marker = r.pending?.marker || '【接力结束_手动】';
-    await copy(r.pending?.prompt || C.promptFor(r, stage, marker));
+    await copy(r.pending?.parts?.[r.pending.partIndex]?.prompt || r.pending?.prompt || C.promptFor(r, stage, marker));
   });
   bind('acceptManual', async () => {
     const r = engine.run; if (!r) throw new Error('请先开始一个任务。');
-    if (!confirm('将粘贴内容作为「' + C.labels[C.stages[r.stageIndex]] + '」的完整回答？请确认模型已经回答完毕。')) return;
+    if (!confirm('将粘贴内容作为「' + C.labels[C.stageAt(r)] + '」的完整回答，并继续下一轮？请确认模型已经回答完毕。')) return;
     await engine.acceptManual(C.stripMarker($('manual').value, r.pending?.marker || '【接力结束_手动】'));
-    $('manual').value = ''; render();
+    $('manual').value = ''; if (engine.run.status !== 'done') {await engine.resume(); await engine.tick();} render();
   });
-  for (const [button, role] of [['showPrimary','primary'],['showReviewer','reviewer']]) {
+  for (const [button, role] of [['showPrimary','primary'],['showReviewer','reviewer'],['showThird','third']]) {
     bind(button, async () => {
       if (!isExtension) {message('请在已安装的扩展中打开工作台。'); return;}
       const tab = engine.run?.tabs[role];
@@ -208,9 +222,9 @@ async function initialize() {
     });
   }
   bind('diagnose', async () => {
-    if (!isExtension || !engine.run) throw new Error('请先在扩展内开始任务，创建两个任务网页。');
+    if (!isExtension || !engine.run) throw new Error('请先在扩展内开始任务，创建任务网页。');
     const results = [];
-    for (const role of ['primary','reviewer']) {
+    for (const role of [...new Set(engine.run.route)]) {
       const t = engine.run.tabs[role];
       if (!t) {results.push('尚未打开任务网页'); continue;}
       try { const s = await io.snapshot(t.id, engine.run[role]); results.push(s.name + '：' + (s.input ? '输入框已连接' : '需要登录或适配') + '，识别到 ' + s.answers.length + ' 段回答'); }

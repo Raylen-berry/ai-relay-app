@@ -3,15 +3,15 @@ const assert = require('node:assert/strict');
 const Engine = require('../extension/engine.js');
 const C = require('../extension/core.js');
 function harness() {
-  let time=1000, seq=0; const tabs=new Map(), sent=[], snapshots=[];
+  let time=1000, seq=0; const tabs=new Map(), sent=[], snapshots=[], activated=[], closed=[];
   const io={
     async create(provider){const id=++seq;tabs.set(id,{ok:true,input:true,inputOccupied:false,draft:'',busy:false,url:C.providers[provider].url,answers:[]});return id;},
     async snapshot(id){if(!tabs.has(id))throw new Error('页面已关闭');return structuredClone(tabs.get(id));},
-    async activate(){}, async cancel(){}, async resume(){},
+    async activate(id){activated.push(id);}, async close(id){closed.push(id);}, async cancel(){}, async resume(){},
     async send(id,p){sent.push({id,...p});return {ok:true};}
   };
   const e = new Engine(io,async r=>snapshots.push(structuredClone(r)),()=>time,()=>String(++seq));
-  return {e,io,tabs,sent,snapshots,advance:ms=>time+=ms,config:{q:'问题',primary:'deepseek',reviewer:'chatgpt',timeout:5,templates:{...C.templates}}};
+  return {e,io,tabs,sent,snapshots,activated,closed,advance:ms=>time+=ms,config:{q:'问题',primary:'deepseek',reviewer:'chatgpt',timeout:5,templates:{...C.templates}}};
 }
 async function answer(h,body) {
   const p=h.sent.at(-1);h.tabs.get(p.id).answers.push({text:body+p.marker});
@@ -26,6 +26,8 @@ test('full three-stage chain preserves context and returns to the original tab',
   assert.match(h.sent[2].prompt,/审核建议/);await answer(h,'【修正处理】已吸收\n【最终答案】最终文本');
   assert.equal(h.e.run.status,'done');assert.equal(h.e.run.finalOut,'最终文本');
   assert.equal(h.sent.length,3);
+  assert.deepEqual(h.closed.sort(),[h.e.run.tabs.primary.id,h.e.run.tabs.reviewer.id].sort());
+  assert.equal(h.activated[0],h.e.run.tabs.primary.id);
 });
 test('lost send acknowledgment never automatically repeats submission, including after reload',async()=>{
   const h=harness();h.io.send=async(id,p)=>{h.sent.push({id,...p});throw new Error('port lost');};
@@ -123,4 +125,42 @@ test('resuming a Kimi legacy collapsed prompt repairs only the exact pending tas
     assert.equal(h.e.run.status,modified?'paused':'running');
     if(!modified)assert.equal(h.sent[1].prompt,p.prompt);
   }
+});
+
+test('custom 1-2-3-2-1 route reuses each model conversation and keeps all prior reviews',async()=>{
+  const h=harness();await h.e.begin({...h.config,third:'kimi',sequence:'1-2-3-2-1'});
+  await h.e.tick();assert.equal(h.sent.length,1);
+  await answer(h,'初稿');await h.e.tick();assert.equal(h.sent.length,2);
+  await answer(h,'审核二');await h.e.tick();assert.equal(h.sent.length,3);
+  await answer(h,'审核三');await h.e.tick();assert.equal(h.sent.length,4);
+  assert.equal(h.sent[3].id,h.sent[1].id);assert.match(h.sent[3].prompt,/审核二/);assert.match(h.sent[3].prompt,/审核三/);
+  await answer(h,'复审二');await h.e.tick();assert.equal(h.sent.length,5);
+  assert.equal(h.sent[4].id,h.sent[0].id);assert.match(h.sent[4].prompt,/复审二/);
+  await answer(h,'【最终答案】已综合四轮意见');
+  assert.equal(h.e.run.finalOut,'已综合四轮意见');assert.equal(h.e.run.turns.length,5);
+  assert.equal(h.closed.length,3);
+});
+
+test('long question sends bounded chunks in order and waits for each receipt',async()=>{
+  const h=harness();await h.e.begin({...h.config,q:'研究材料\n'.repeat(1500)});
+  await h.e.tick();const p=h.e.run.pending;
+  assert.ok(p.parts.length>2);assert.equal(h.sent.length,1);assert.equal(p.phase,'waitingPart');
+  for(let i=0;i<p.parts.length-1;i++) {
+    const chunk=h.sent.at(-1);assert.equal(chunk.marker,p.parts[i].marker);
+    h.tabs.get(chunk.id).answers.push({text:'收到 '+chunk.marker});
+    await h.e.tick();h.advance(1200);await h.e.tick();
+    assert.equal(p.partIndex,i+1);
+    await h.e.tick();assert.equal(h.sent.length,i+2);
+  }
+  assert.equal(h.sent.at(-1).marker,p.marker);
+  assert.equal(p.phase,'waiting');
+});
+
+test('manual takeover and handoff resume receipt collection without resending',async()=>{
+  const h=harness();await h.e.begin(h.config);await h.e.tick();
+  const prior=h.sent.length;
+  await h.e.takeover();assert.equal(h.e.run.status,'paused');
+  await h.e.markManualSent();await h.e.resume();await h.e.tick();
+  assert.equal(h.sent.length,prior);assert.equal(h.e.run.pending.phase,'waiting');
+  await answer(h,'用户手动取得的初稿');assert.equal(h.e.run.outputs.first,'用户手动取得的初稿');
 });

@@ -27,7 +27,8 @@ async function workbench(saved) {
     chrome:{runtime:{id:'relay',getURL:f=>'chrome-extension://relay/'+f},storage:{local:{
       get:async()=>({relay:structuredClone(storage)}),set:async value=>{storage=structuredClone(value.relay);}
     }},tabs:{create:async({url})=>newTab(url),get:async id=>tabs.get(id),update:async()=>{},
-      sendMessage:async(id,msg)=>{messages.push(msg);if(msg.type==='RELAY_SNAPSHOT')return {ok:true,protocol:3,input:true,inputOccupied:false,busy:false,url:tabs.get(id).url,answers:[]};return {ok:true};}
+      sendMessage:async(id,msg)=>{messages.push(msg);if(msg.type==='RELAY_SNAPSHOT')return {ok:true,protocol:3,input:true,inputOccupied:false,busy:false,url:tabs.get(id).url,answers:[]};return {ok:true};},
+      remove:async id=>tabs.delete(id)
     },windows:{create:async({url})=>({id:1,tabs:[newTab(url)]}),update:async()=>{}}}
   });
   for(const file of ['core.js','editor.js','engine.js','app.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../extension',file),'utf8'),context);
@@ -67,4 +68,20 @@ test('reopening an interrupted running task pauses it and leaves question editab
   const w=await workbench(saved);
   try {await w.grant();assert.equal(vm.runInContext('engine.run.status',w.context),'paused');assert.equal(!!w.get('question').disabled,false);assert.equal(w.messages.length,0);}
   finally {w.cleanup();}
+});
+
+test('workbench shows a custom five-turn route and manual takeover can advance it',async()=>{
+  const w=await workbench();
+  try {
+    await w.grant();w.get('sequence').value='1-2-3-2-1';
+    const SeqEvent=w.get('sequence').ownerDocument.defaultView.Event;
+    w.get('sequence').dispatchEvent(new SeqEvent('input'));
+    await w.input('用户的研究问题');await w.click('start');
+    assert.equal(w.get('steps').querySelectorAll('span').length,5);
+    assert.equal(w.messages.filter(m=>m.type==='RELAY_SEND').length,1);
+    await w.click('takeover');assert.equal(vm.runInContext('engine.run.status',w.context),'paused');
+    w.get('manual').value='人工取得的第一轮答案';await w.click('acceptManual');
+    assert.equal(w.messages.filter(m=>m.type==='RELAY_SEND').length,2);
+    assert.equal(vm.runInContext('engine.run.stageIndex',w.context),1);
+  } finally {w.cleanup();}
 });

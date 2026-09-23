@@ -15,4 +15,3 @@ async function openApp() {
   await chrome.windows.create({url, type: 'popup', width: 1220, height: 860});
 }
 chrome.action.onClicked.addListener(() => openApp().catch(console.error));
-chrome.runtime.onInstalled.addListener(() => openApp().catch(console.error));

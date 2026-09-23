@@ -6,6 +6,7 @@ const root=__dirname;
 require('./tools-icons.cjs');
 const manifestPath=path.join(root,'extension','manifest.json');
 const manifest=JSON.parse(fs.readFileSync(manifestPath,'utf8'));
+fs.copyFileSync(path.join(root,'assets','relay.ico'),path.join(root,'assets','relay-'+manifest.version+'.ico'));
 if(!manifest.key) {
   const pair=crypto.generateKeyPairSync('rsa',{modulusLength:2048});
   manifest.key=pair.publicKey.export({type:'spki',format:'der'}).toString('base64');

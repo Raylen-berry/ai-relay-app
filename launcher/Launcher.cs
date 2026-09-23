@@ -27,13 +27,13 @@ class Launcher : Form {
         if(File.Exists(brandPath))brand.Image=Image.FromFile(brandPath);
         Controls.Add(brand);
         var title = new Label {Text="AI 互审 · Relay", Font=new Font(Font.FontFamily,23,FontStyle.Bold), ForeColor=Color.FromArgb(36,95,81), Location=new Point(88,26), AutoSize=true}; Controls.Add(title);
-        var sub = new Label {Text="用已登录的模型网页，完成初稿 → 审核 → 定稿。",Location=new Point(30,82),AutoSize=true}; Controls.Add(sub);
+        var sub = new Label {Text="用已登录的模型网页，按自定顺序完成初稿 → 多轮审核 → 定稿。",Location=new Point(30,82),AutoSize=true}; Controls.Add(sub);
         edge.Text="Microsoft Edge"; edge.Location=new Point(30,124); edge.Width=185;
         chrome.Text="Google Chrome"; chrome.Location=new Point(225,124); chrome.Width=185; chrome.Checked=true;
         Controls.Add(edge); Controls.Add(chrome);
         AddButton("打开互审工作台",30,171,290,48,OpenApp);
         AddButton("阅读安装与使用说明",340,171,290,48,delegate {OpenFile("开始使用.html");});
-        var steps = new Label {Text="首次使用（只需一次）\n\n1. 打开扩展管理页，开启「开发人员模式」。\n2. 点击「加载解压缩的扩展」，选择本包的 extension 文件夹。\n3. 在同一浏览器登录两个模型，再打开互审工作台。",Location=new Point(30,244),Size=new Size(602,115)}; Controls.Add(steps);
+        var steps = new Label {Text="首次使用（只需一次）\n\n1. 打开扩展管理页，开启「开发人员模式」。\n2. 点击「加载解压缩的扩展」，选择本包的 extension 文件夹。\n3. 在同一浏览器登录所选模型，再打开互审工作台。",Location=new Point(30,244),Size=new Size(602,115)}; Controls.Add(steps);
         AddButton("打开扩展管理页",30,375,192,37,delegate {LaunchBrowser(edge.Checked?"edge://extensions/":"chrome://extensions/",false);});
         AddButton("复制 extension 路径",238,375,192,37,delegate {Clipboard.SetText(Path.Combine(root,"extension"));MessageBox.Show("文件夹路径已复制。在加载扩展的文件夹选择窗口中粘贴即可。","路径已复制");});
         AddButton("打开应用文件夹",446,375,184,37,delegate {Process.Start("explorer.exe", "\""+root+"\"");});

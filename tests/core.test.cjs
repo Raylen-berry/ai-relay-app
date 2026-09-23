@@ -34,3 +34,25 @@ test('ignores old answers, empty states and streaming pauses', () => {
   a.busy=false; p=C.observe(p,a,marker,1100100); assert.equal(p.done,false);
   p=C.observe(p,a,marker,1106200); assert.equal(p.done,true);
 });
+
+test('custom route validates three distinct models and returns to the first',()=>{
+  const config={q:'问题',primary:'deepseek',reviewer:'chatgpt',third:'kimi',sequence:'1-2-3-2-1',templates:{...C.templates}};
+  assert.deepEqual(C.routeFor(config),['primary','reviewer','third','reviewer','primary']);
+  assert.equal(C.stageAt({...config,route:C.routeFor(config),stageIndex:2}),'review');
+  assert.throws(()=>C.routeFor({...config,third:'chatgpt'}),/第三模型/);
+  assert.throws(()=>C.routeFor({...config,sequence:'1-2-2-1'}),/相邻/);
+  assert.throws(()=>C.routeFor({...config,sequence:'1-2-3'}),/首|接力/);
+});
+
+test('long prompt is divided into bounded sequential text segments with unique receipts',()=>{
+  const content='材料😀\n'.repeat(1800)+'【接力结束_final】';
+  const parts=C.splitPrompt(content,'run',2500);
+  assert.ok(parts.length>2);
+  assert.ok(parts.every(p=>Array.from(p.prompt).length<2800));
+  const chars=Array.from(content);
+  assert.ok(parts.every((p,i)=>p.prompt.endsWith(chars.slice(i*2500,(i+1)*2500).join(''))));
+  assert.equal(new Set(parts.slice(0,-1).map(p=>p.marker)).size,parts.length-1);
+  assert.equal(parts.at(-1).marker,null);
+  assert.ok(parts.at(-1).prompt.endsWith('【接力结束_final】'));
+  assert.deepEqual(C.splitPrompt('短问题','run'),[{prompt:'短问题',marker:null}]);
+});
