@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>AI 互审 · Relay</title><link rel="icon" type="image/png" href="icon-32.png"><link rel="stylesheet" href="app.css"></head>
 <body>
-  <aside class="rail"><img class="monogram" src="brand.png?v=0.4.2" alt="立体循环接力与自动执行"><div class="rail-label">AI RELAY</div><div class="rail-bottom">互相检验<br>认真作答</div></aside>
+  <aside class="rail"><img class="monogram" src="brand.png?v=0.4.3" alt="线条循环接力与自动执行"><div class="rail-label">AI RELAY</div><div class="rail-bottom">互相检验<br>认真作答</div></aside>
   <main>
     <header><div><p class="eyebrow">你的多模型工作台 · 网页版</p><h1>一个问题，<span>多轮交叉审核。</span></h1><p class="subtitle">按你设定的顺序接力，最后回到第一模型定稿。</p></div><span class="badge" id="modeBadge">本地保存</span></header>
     <section class="routing" aria-label="模型选择">
@@ -31,7 +31,7 @@
     </section>
     <details class="details"><summary>查看过程与手动接续 <span>保留每一步结果</span></summary><div class="process-grid"><label>第一轮答案<textarea id="firstOut" readonly></textarea></label><label>历轮审核意见<textarea id="reviewOut" readonly></textarea></label></div><label>完整定稿（含修正处理）<textarea id="lastOut" readonly></textarea></label><div class="recovery"><h3>卡住时由你接管</h3><p class="tiny">点上方“手动接管本轮”停止自动发送并打开当前模型页。可以复制当前待发片段到网页手动发送，再点“我已手动发送”；也可以直接把该轮完整回答粘贴在下方，采用后自动跳到下一轮。</p><button id="copyPrompt" class="secondary">复制当前待发内容</button><button id="manualSent" class="secondary">我已手动发送，继续收取</button><textarea id="manual" aria-label="手动补入回答" placeholder="粘贴当前轮的完整回答，可跳过网页收取"></textarea><button id="acceptManual" class="secondary">采用回答并跳到下一轮</button></div><pre id="logs" aria-label="运行记录"></pre></details>
     <details class="details"><summary>设置与数据 <span>自动保存 · 导入导出 · 提示词</span></summary><div class="settings-row"><label>单轮最长等待 <select id="timeout"><option value="5">5 分钟</option><option value="15" selected>15 分钟</option><option value="30">30 分钟</option><option value="60">60 分钟</option></select></label><button id="export" class="secondary">导出 JSON</button><label class="file-button">导入 JSON<input id="import" type="file" accept=".json,application/json"></label><button id="clear" class="text-btn">清空本地记录</button></div><p class="tiny">支持导入原 v2 数据。导入仅恢复文字和设置，不会自动发送。数据保存在本机此浏览器内。</p><label>初稿提示词<textarea id="templateFirst"></textarea></label><label>审核提示词<textarea id="templateReview"></textarea></label><label>定稿提示词<textarea id="templateFinal"></textarea></label><p class="tiny">可用变量：{q} 原始问题，{first} 初稿，{review} 最近一轮审核，{history} 所有此前轮次，{primary}/{reviewer}/{third} 模型名称。</p><button id="resetTemplates" class="secondary">恢复默认提示词</button></details>
-    <footer><span>AI 互审 · Relay 0.4.2 测试版</span><span>支持文字与 TXT 材料 · 使用网页当前选定的模型和模式 · 暂不支持 Kimi 桌面端</span></footer>
+    <footer><span>AI 互审 · Relay 0.4.3 测试版</span><span>支持文字与 TXT 材料 · 使用网页当前选定的模型和模式 · 暂不支持 Kimi 桌面端</span></footer>
   </main>
   <script src="core.js"></script><script src="editor.js"></script><script src="engine.js"></script><script src="layout.js"></script><script src="app.js"></script>
 </body></html>

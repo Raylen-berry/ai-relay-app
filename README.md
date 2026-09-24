@@ -1,4 +1,4 @@
-# AI 互审 · Relay 0.4.2
+# AI 互审 · Relay 0.4.3
 
 <img src="assets/relay-128.png" alt="AI 互审图标" width="96">
 
@@ -8,11 +8,11 @@ Windows 启动助手 + Chromium Manifest V3 扩展。使用同一浏览器配置
 
 ## 安装包
 
-下载 [Windows 安装包](AI-Relay-0.4.2-Windows.zip) 并完整解压，双击 `安装到本机.cmd`。默认安装到 `%LOCALAPPDATA%\Programs\AI-Relay`，优先 Edge，未安装时使用 Chrome，创建桌面与开始菜单快捷方式。无需 D 盘或管理员权限。也可打开 `AI互审启动助手.exe` 选择浏览器并安装。首次需在所选浏览器手动加载安装目录内的 extension，再登录模型。详见 [换机安装](换机安装.md)。
+下载 [Windows 安装包](AI-Relay-0.4.3-Windows.zip) 并完整解压，双击 `安装到本机.cmd`。默认安装到 `%LOCALAPPDATA%\Programs\AI-Relay`，优先 Edge，未安装时使用 Chrome，创建桌面与开始菜单快捷方式。无需 D 盘或管理员权限。也可打开 `AI互审启动助手.exe` 选择浏览器并安装。首次需在所选浏览器手动加载安装目录内的 extension，再登录模型。详见 [换机安装](换机安装.md)。
 
 安装 ZIP 只含运行文件和说明，不包含账号登录信息、聊天记录或开发依赖。源码、测试、锁定的依赖版本及图标原图留在仓库中，可重新构建。旁边的 `.sha256` 文件用于校验下载包。现有自定义安装用 `Install.ps1 -InstallDir 原目录 -Browser edge` 覆盖即可。
 
-图标为透明背景的立体玻璃循环箭头与自动执行闪电，已去除 AI 字样。原图在 assets/relay-master.png，生成提示词见 assets/icon-design.md。PNG、ICO、EXE、扩展及工作台标识统一。
+图标为简洁线条风：哑光深色圆底、两段循环箭头与细线闪电，无 AI 字样和玻璃高光。矢量源文件在 assets/relay-icon.svg，设计说明见 assets/icon-design.md。PNG、ICO、EXE、扩展及工作台标识统一。
 
 ## 开发与验证
 
@@ -20,7 +20,7 @@ Windows 启动助手 + Chromium Manifest V3 扩展。使用同一浏览器配置
 
 `npm run package` 生成本版运行 ZIP 与 SHA256 校验文件。需先运行 `npm run build`、`npm test`。
 
-`node tools-build.cjs` 先从仓库保存的立体图标原图生成各尺寸图标，再使用系统 .NET Framework C# 编译器生成带图标的启动助手，并在首次构建时生成稳定的公开扩展标识。仅存公钥，无私钥。不要更改 manifest.json 中的 key，否则扩展 ID 和本地数据空间会变化。
+`node tools-build.cjs` 先从仓库保存的 SVG 图标源文件生成各尺寸图标，再使用系统 .NET Framework C# 编译器生成带图标的启动助手，并在首次构建时生成稳定的公开扩展标识。仅存公钥，无私钥。不要更改 manifest.json 中的 key，否则扩展 ID 和本地数据空间会变化。
 
 `node preview-server.cjs` 在 127.0.0.1:8766 提供界面预览，不连接任何模型。浏览器自动化运行需安装 extension 文件夹。
 
@@ -47,6 +47,8 @@ Windows 启动助手 + Chromium Manifest V3 扩展。使用同一浏览器配置
 网页适配是持续维护项。2026-09-21 核对 DeepSeek/ChatGPT 现有控件、Kimi 输入/发送/思考和正文分区，并通过 Kimi 简短网页测试。新版完整扩展多轮链路尚未验证。不要将模拟测试写成真实模型端到端测试。
 
 ## 更新
+
+0.4.3：图标改为简洁线条风，保留循环与自动执行含义，去掉玻璃质感。同步更新桌面、启动助手、扩展、工作台及换机安装包。
 
 0.4.2：支持拖动分隔线调整输入/输出宽度、独立调整文字框高度及滑条微调，尺寸自动保存并随 JSON 迁移。新图标去掉字母，以立体玻璃循环和闪电表现自动接力。新增双击安装入口、当前用户目录安装、启动助手安装按钮、换机指南及可重复打包脚本。用户反馈当前核心接力功能没有明显问题；本次保留原有发送与接续流程。
 

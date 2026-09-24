@@ -1,8 +1,8 @@
 const fs=require('node:fs'),path=require('node:path');
 const {Resvg}=require('@resvg/resvg-js');
-const root=__dirname,master=fs.readFileSync(path.join(root,'assets/relay-master.png'));
-// Embed the generated master only in memory for high-quality downsampling.
-const svg='<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1024" height="1024" viewBox="0 0 1024 1024"><image width="1024" height="1024" xlink:href="data:image/png;base64,'+master.toString('base64')+'"/></svg>';
+const root=__dirname;
+// One editable vector source keeps the small browser and Windows icons crisp.
+const svg=fs.readFileSync(path.join(root,'assets/relay-icon.svg'),'utf8');
 const sizes=[16,24,32,48,64,128,256,512];
 const images=[];
 for(const size of sizes){
@@ -18,4 +18,4 @@ const header=Buffer.alloc(6+images.length*16);header.writeUInt16LE(1,2);header.w
 let offset=header.length;
 images.forEach(({size,png},i)=>{const p=6+i*16;header[p]=header[p+1]=size===256?0:size;header.writeUInt16LE(1,p+4);header.writeUInt16LE(32,p+6);header.writeUInt32LE(png.length,p+8);header.writeUInt32LE(offset,p+12);offset+=png.length;});
 fs.writeFileSync(path.join(root,'assets/relay.ico'),Buffer.concat([header,...images.map(i=>i.png)]));
-console.log('Generated 8 PNG sizes, workbench branding and 7-frame Windows ICO from the 3D master.');
+console.log('Generated 8 PNG sizes, workbench branding and 7-frame Windows ICO from the line icon SVG.');

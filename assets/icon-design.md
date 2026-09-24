@@ -1,9 +1,7 @@
-# 0.4.2 图标
+# 0.4.3 图标
 
-使用内置 image_gen 工具生成，原图保存在 relay-master.png。工具输出为透明背景立体图像；tools-icons.cjs 从这份原图生成所有 Windows 与浏览器尺寸，无需重新生成图像。旧图的 AI 字样已移除。
+简洁线条风：哑光石墨绿圆底，米白与薄荷绿的两段循环箭头，中间是细线闪电，表示模型间的往返接力与自动执行。无字母、渐变、玻璃高光、阴影或立体底座。圆形以外透明。
 
-用户的 FlyingMouse 桌面图标仅作为简洁圆形轮廓与轨道运动的参考。
+矢量源文件为 `relay-icon.svg`，可直接编辑。`tools-icons.cjs` 从同一 SVG 生成全部 PNG 与 Windows ICO；Windows 启动助手、桌面快捷方式、浏览器扩展和工作台使用一致图形。重新构建无需图像生成服务。
 
-## 生成提示词
-
-Use case: stylized-concept / app logo. Edit the old app icon shown in reference 1 into a beautiful, restrained, professionally rendered 3D Windows desktop application icon. Reference 2 is the user's desktop screenshot: ONLY use the FlyingMouse icon (dark circular badge with delicate orbital lines) as inspiration for clean orbital movement and recognisable silhouette, never reproduce the desktop or its other icons. Replace the old flat square and remove ALL letters, especially AI. Preserve the concept of automated round-trip exchange: two sculpted looping arrows/orbits with a small elegant lightning-shaped core. One single centered standalone icon, nearly front-on but subtly tilted orbital bands with visible depth, dimensional extrusion, polished translucent mint jade / frosted silver glass, graceful interlaced trajectories and clear directional arrow tips, luminous but not neon, soft studio highlights and realistic ambient occlusion. A circular dark graphite/teal softly bevelled medallion base behind the orbit, premium macOS/Windows app icon product-render quality. Rich volumetric form clearly distinguishable from flat vector artwork, calm beautiful finish. Keep simple enough to recognize at 32px, bold silhouette and generous internal negative space. No text, no AI letters, no watermark, no grid, no desktop shortcut glyph, no mockup scene, no multiple variants. Square 1024x1024 image with truly transparent background outside the circular icon, icon filling about 90% of canvas, no opaque square backdrop.
+已目视检查 128、32、16 px 图标。主循环线宽为 4.5 个 SVG 单位，中心闪电为 2.8，保留足够留白，避免小尺寸拥挤。
