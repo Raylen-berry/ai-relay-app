@@ -31,7 +31,7 @@ async function workbench(saved) {
       remove:async id=>tabs.delete(id)
     },windows:{create:async({url})=>({id:1,tabs:[newTab(url)]}),update:async()=>{}}}
   });
-  for(const file of ['core.js','editor.js','engine.js','app.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../extension',file),'utf8'),context);
+  for(const file of ['core.js','editor.js','engine.js','layout.js','app.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../extension',file),'utf8'),context);
   await turn();
   const grant=async()=>{owner();await turn();};
   const click=async id=>{const el=window.document.getElementById(id);assert.equal(!!el.disabled,false,id+' must be enabled');el.click();await turn();await turn();};

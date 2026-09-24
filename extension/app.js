@@ -12,6 +12,7 @@ let taskWindow;
 let saveChain = Promise.resolve();
 let saveTimer;
 let transient = null;
+let layout;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 function readForm() {
   config = {q: $('question').value, primary: $('primary').value, reviewer: $('reviewer').value,
@@ -187,6 +188,12 @@ async function loadSaved() {
 async function initialize() {
   engine = new RelayEngine(io, async () => {render(); await store();});
   await loadSaved();
+  let savedLayout;
+  try {savedLayout=isExtension ? (await chrome.storage.local.get('relayLayout')).relayLayout : JSON.parse(localStorage.getItem('aiRelayLayout'));} catch {}
+  layout=RelayLayout.init(savedLayout, value => {
+    const write=isExtension ? chrome.storage.local.set({relayLayout:value}) : Promise.resolve(localStorage.setItem('aiRelayLayout',JSON.stringify(value)));
+    write.catch(()=>message('框体大小未能保存。',true));
+  });
   populateForm(); render();
   $('previewNotice').hidden = isExtension;
   $('modeBadge').textContent = isExtension ? '本地保存' : '界面预览';
@@ -261,7 +268,7 @@ async function initialize() {
   });
   bind('export', async () => {
     readForm(); await store();
-    const data = {schema: 'ai-relay', version: 3, exported: new Date().toISOString(), config, run: engine.run, finalOut: $('finalOut').value};
+    const data = {schema: 'ai-relay', version: 3, exported: new Date().toISOString(), config, run: engine.run, finalOut: $('finalOut').value, layout:layout.get()};
     if (!engine.run && imported) data.run = {outputs: imported.outputs};
     const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'}));
     const a = document.createElement('a'); a.href = url; a.download = 'ai-relay-' + new Date().toISOString().slice(0,10) + '.json'; a.click();
@@ -271,8 +278,10 @@ async function initialize() {
     try {
       const file = ev.target.files[0]; if (!file) return;
       if (file.size > 8 * 1024 * 1024) throw new Error('文件超过 8 MB，请导入较小的 JSON。');
-      const data = C.importData(JSON.parse(await file.text()));
+      const raw = JSON.parse(await file.text());
+      const data = C.importData(raw);
       if ((engine.run || config.q) && !confirm('用导入数据替换当前工作台内容？')) return;
+      if(raw.layout)layout.set(raw.layout);
       engine.run = null; imported = data; config = data.config; populateForm(); render(); await store(); message('导入成功；不会自动发送。');
     } catch (e) {message('导入失败：' + e.message, true);} finally {ev.target.value = '';}
   });

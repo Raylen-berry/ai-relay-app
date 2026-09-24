@@ -17,7 +17,7 @@ class Launcher : Form {
     Launcher() {
         Text = "AI 互审 · 启动助手";
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-        ClientSize = new Size(660, 470);
+        ClientSize = new Size(660, 530);
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Microsoft YaHei UI", 10);
         BackColor = Color.FromArgb(246,247,243);
@@ -29,15 +29,16 @@ class Launcher : Form {
         var title = new Label {Text="AI 互审 · Relay", Font=new Font(Font.FontFamily,23,FontStyle.Bold), ForeColor=Color.FromArgb(36,95,81), Location=new Point(88,26), AutoSize=true}; Controls.Add(title);
         var sub = new Label {Text="用已登录的模型网页，按自定顺序完成初稿 → 多轮审核 → 定稿。",Location=new Point(30,82),AutoSize=true}; Controls.Add(sub);
         edge.Text="Microsoft Edge"; edge.Location=new Point(30,124); edge.Width=185;
-        chrome.Text="Google Chrome"; chrome.Location=new Point(225,124); chrome.Width=185; chrome.Checked=true;
+        chrome.Text="Google Chrome"; chrome.Location=new Point(225,124); chrome.Width=185; edge.Checked=true;
         Controls.Add(edge); Controls.Add(chrome);
         AddButton("打开互审工作台",30,171,290,48,OpenApp);
         AddButton("阅读安装与使用说明",340,171,290,48,delegate {OpenFile("开始使用.html");});
-        var steps = new Label {Text="首次使用（只需一次）\n\n1. 打开扩展管理页，开启「开发人员模式」。\n2. 点击「加载解压缩的扩展」，选择本包的 extension 文件夹。\n3. 在同一浏览器登录所选模型，再打开互审工作台。",Location=new Point(30,244),Size=new Size(602,115)}; Controls.Add(steps);
+        var steps = new Label {Text="换机 / 首次使用（只需一次）\n\n1. 点下方「安装到本机」，自动创建桌面快捷方式。\n2. 在扩展管理页开启开发人员模式，加载安装目录的 extension。\n3. 在同一浏览器登录模型；旧电脑的 JSON 可在工作台导入。",Location=new Point(30,244),Size=new Size(602,115)}; Controls.Add(steps);
         AddButton("打开扩展管理页",30,375,192,37,delegate {LaunchBrowser(edge.Checked?"edge://extensions/":"chrome://extensions/",false);});
         AddButton("复制 extension 路径",238,375,192,37,delegate {Clipboard.SetText(Path.Combine(root,"extension"));MessageBox.Show("文件夹路径已复制。在加载扩展的文件夹选择窗口中粘贴即可。","路径已复制");});
         AddButton("打开应用文件夹",446,375,184,37,delegate {Process.Start("explorer.exe", "\""+root+"\"");});
-        Controls.Add(new Label {Text="本程序是启动助手；自动互审由浏览器扩展执行。无须配置 API Key。",Location=new Point(30,434),AutoSize=true,ForeColor=Color.FromArgb(105,126,110),Font=new Font(Font.FontFamily,9)});
+        AddButton("安装到本机 / 创建快捷方式",30,429,600,42,InstallApp);
+        Controls.Add(new Label {Text="默认安装到当前用户目录，无需管理员权限、D 盘或 API Key。",Location=new Point(30,492),AutoSize=true,ForeColor=Color.FromArgb(105,126,110),Font=new Font(Font.FontFamily,9)});
         try {extensionId=File.ReadAllText(Path.Combine(root,"extension-id.txt")).Trim();}
         catch {extensionId="";}
     }
@@ -61,6 +62,21 @@ class Launcher : Form {
     void OpenApp() {
         if(extensionId.Length!=32)throw new Exception("缺少应用配置，请完整解压压缩包后再打开。");
         LaunchBrowser("chrome-extension://"+extensionId+"/app.html",true);
+    }
+    void InstallApp() {
+        string destination=File.Exists(Path.Combine(root,"installed.txt"))?root:Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Programs","AI-Relay");
+        string script=Path.Combine(root,"Install.ps1");
+        if(!File.Exists(script))throw new Exception("缺少安装文件，请完整解压压缩包。");
+        string powershell=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),@"WindowsPowerShell\v1.0\powershell.exe");
+        var info=new ProcessStartInfo(powershell,"-NoProfile -ExecutionPolicy Bypass -File \""+script+"\" -InstallDir \""+destination.TrimEnd('\\')+"\" -Browser "+(edge.Checked?"edge":"chrome"));
+        info.UseShellExecute=false;info.CreateNoWindow=true;info.WindowStyle=ProcessWindowStyle.Hidden;
+        info.RedirectStandardError=true;
+        using(var process=Process.Start(info)) {
+            string error=process.StandardError.ReadToEnd();process.WaitForExit();
+            if(process.ExitCode!=0)throw new Exception("安装未完成："+error);
+        }
+        root=destination;Clipboard.SetText(Path.Combine(root,"extension"));
+        MessageBox.Show("已安装并创建桌面快捷方式。\n\n扩展文件夹路径已复制。请在所选浏览器的扩展管理页加载此文件夹：\n"+Path.Combine(root,"extension")+"\n\n已有扩展只需重新加载。换机需要重新登录模型。","安装完成");
     }
     void OpenFile(string name) {Process.Start(new ProcessStartInfo(Path.Combine(root,name)){UseShellExecute=true});}
 }

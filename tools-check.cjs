@@ -14,6 +14,8 @@ for (const file of [...uiScripts, ...contentScripts, ...Object.values(manifest.i
   assert.ok(fs.existsSync(path.join(dir, file)), 'Missing packaged file: ' + file);
 }
 assert.ok(uiScripts.indexOf('editor.js') < uiScripts.indexOf('engine.js'));
+assert.ok(uiScripts.indexOf('layout.js') >= 0 && uiScripts.indexOf('layout.js') < uiScripts.indexOf('app.js'));
+assert.ok(fs.existsSync(path.join(dir,'brand.png')));
 assert.ok(contentScripts.indexOf('editor.js') < contentScripts.indexOf('content.js'));
 assert.ok(html.includes('Relay ' + manifest.version));
 console.log('Verified extension syntax, script order, referenced files and version ' + manifest.version);
