@@ -2,11 +2,14 @@
 const C = RelayCore;
 const $ = id => document.getElementById(id);
 const isExtension = !!globalThis.chrome?.runtime?.id && !!chrome.storage;
-const defaultConfig = () => ({q: '', primary: 'deepseek', reviewer: 'chatgpt', third:'kimi', sequence:'1-2-1', timeout: 15, templates: {...C.templates}});
+const defaultConfig = () => ({q: '', attachments:[], primary: 'deepseek', reviewer: 'chatgpt', third:'kimi', sequence:'1-2-1', timeout: 15, templates: {...C.templates}});
 let config = defaultConfig();
 let imported = null;
 // Disable writes until this window owns the runner, including during startup.
 let lockedElsewhere = isExtension;
+let checkingOwner = isExtension;
+let ownerNoticeTimer;
+let addingFiles = false;
 let engine;
 let taskWindow;
 let saveChain = Promise.resolve();
@@ -15,7 +18,7 @@ let transient = null;
 let layout;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 function readForm() {
-  config = {q: $('question').value, primary: $('primary').value, reviewer: $('reviewer').value,
+  config = {q: $('question').value, attachments:config.attachments || [], primary: $('primary').value, reviewer: $('reviewer').value,
     third:$('third').value, sequence:$('sequence').value,
     timeout: Number($('timeout').value), templates: {first: $('templateFirst').value, review: $('templateReview').value, final: $('templateFinal').value}};
 }
@@ -72,13 +75,16 @@ function render() {
   const paused = r?.status === 'paused';
   renderTiming(r);
   for (const id of ['question','primary','reviewer','third','sequence','timeout','templateFirst','templateReview','templateFinal','resetTemplates']) $(id).disabled = running || lockedElsewhere || engine?.locked;
-  $('import').disabled = running || lockedElsewhere || engine?.locked;
-  $('newTask').disabled = running || lockedElsewhere || engine?.locked;
+  $('import').disabled = running || lockedElsewhere || engine?.locked || addingFiles;
+  $('newTask').disabled = running || lockedElsewhere || engine?.locked || addingFiles;
   $('export').disabled = lockedElsewhere;
-  $('windowNotice').hidden = !lockedElsewhere;
+  $('windowNotice').hidden = !lockedElsewhere || checkingOwner;
+  $('chooseFiles').disabled = running || lockedElsewhere || engine?.locked || addingFiles;
+  $('filePicker').disabled = $('chooseFiles').disabled;
+  renderFiles();
   $('questionHint').hidden = !running && !paused;
   $('questionHint').textContent = running ? '正在处理当前问题。需要换题时，请先点“停止”，再点“新问题”。' : '已暂停，可以修改内容并开始新互审。“继续当前步骤”仍会处理原来的问题。';
-  $('start').disabled = running || !isExtension || lockedElsewhere || engine?.locked;
+  $('start').disabled = running || !isExtension || lockedElsewhere || engine?.locked || addingFiles;
   $('start').textContent = r ? '开始新互审 ↗' : '开始互审 ↗';
   $('pause').disabled = !running || lockedElsewhere;
   $('resume').disabled = !paused || engine?.locked || lockedElsewhere;
@@ -86,7 +92,7 @@ function render() {
   $('manualSent').disabled = !paused || !r?.pending || engine?.locked || lockedElsewhere;
   $('acceptManual').disabled = !paused || engine?.locked || lockedElsewhere;
   $('copyPrompt').disabled = !r || r.status === 'done';
-  $('clear').disabled = running || engine?.locked || lockedElsewhere;
+  $('clear').disabled = running || engine?.locked || lockedElsewhere || addingFiles;
   $('copyFinal').disabled = !((r?.finalOut || imported?.finalOut || '').trim());
   $('charCount').textContent = config.q.length.toLocaleString() + ' 字';
   const output = r?.outputs || imported?.outputs || {};
@@ -117,6 +123,31 @@ function render() {
     if (transient.error) {$('error').textContent = transient.text; $('error').hidden = false;}
   }
 }
+function renderFiles() {
+  const disabled=$('chooseFiles').disabled;
+  const list=$('fileList');list.replaceChildren();
+  for(const file of config.attachments || []) {
+    const item=document.createElement('li'),name=document.createElement('span'),remove=document.createElement('button');
+    name.textContent=file.name+' · '+(file.size<1048576?Math.ceil(file.size/1024)+' KB':(file.size/1048576).toFixed(1)+' MB');
+    name.title=file.name;remove.textContent='移除';remove.className='text-btn';remove.disabled=disabled;remove.setAttribute('aria-label','移除附件 '+file.name);
+    remove.addEventListener('click',async()=>{addingFiles=true;config.attachments=config.attachments.filter(f=>f.id!==file.id);render();try{await store();await pruneFiles();}catch(e){message(e.message,true);}finally{addingFiles=false;render();}});
+    item.append(name,remove);list.append(item);
+  }
+  $('fileSummary').textContent=addingFiles?'正在保存附件…':config.attachments?.length?`${config.attachments.length} 个附件 · 每个模型会话只上传一次`:'图片、PDF、文档等 · 每个最多 20 MB，共 50 MB';
+}
+async function pruneFiles() {
+  if(!globalThis.indexedDB)return;
+  await RelayFiles.retain([...(config.attachments||[]),...(engine.run?.attachments||[])].map(f=>f.id));
+}
+async function addFiles(files) {
+  if($('chooseFiles').disabled || !files.length)return;
+  addingFiles=true;render();
+  try {
+    RelayFiles.validate([...(config.attachments||[]),...files]);
+    config.attachments=[...(config.attachments||[]),...await RelayFiles.add(files)];
+    await store();message('附件已保存在本机，开始互审时发送。');
+  } catch(e){message(e.message,true);} finally {addingFiles=false;render();}
+}
 async function checkedTab(id, provider) {
   let tab;
   try { tab = await chrome.tabs.get(id); } catch { throw new Error('任务网页已关闭。请手动补入本轮回答，或重新开始任务。'); }
@@ -146,7 +177,7 @@ const io = {
       if (engine.run?.status !== 'running' && i > 0) throw new Error('等待连接已停止。');
       try {
         const data = await chrome.tabs.sendMessage(id, {type: 'RELAY_SNAPSHOT'});
-        if (data?.ok && data.protocol !== 4) {
+        if (data?.ok && data.protocol !== 5) {
           const error = new Error(C.providers[provider].name + ' 页面仍在使用旧版连接脚本。请刷新这个模型任务页面，再点继续；只重新加载扩展还不够。');
           error.relayUpdate = true; throw error;
         }
@@ -158,6 +189,7 @@ const io = {
     throw new Error(C.providers[provider].name + ' 页面未连接。请检查网络、登录，并刷新任务网页后继续。');
   },
   send: (id, p) => chrome.tabs.sendMessage(id, {type: 'RELAY_SEND', ...p}),
+  upload: (id, files, batchId, runId, recovery, active) => RelayFiles.upload(msg=>chrome.tabs.sendMessage(id,msg),files,batchId,runId,recovery,active),
   cancel: (id, runId) => chrome.tabs.sendMessage(id, {type: 'RELAY_CANCEL', runId}),
   resume: (id, runId) => chrome.tabs.sendMessage(id, {type: 'RELAY_RESUME', runId})
 };
@@ -182,6 +214,7 @@ async function loadSaved() {
   try { saved = isExtension ? (await chrome.storage.local.get('relay')).relay : JSON.parse(localStorage.getItem('aiRelayPreview')); }
   catch { message('未能读取本地记录。', true); }
   config = saved?.config ? C.importData({config: saved.config}).config : defaultConfig();
+  config.attachments=Array.isArray(saved?.config?.attachments)?saved.config.attachments:[];
   imported = saved?.imported || null;
   engine.restore(saved?.run || null);
 }
@@ -197,6 +230,15 @@ async function initialize() {
   populateForm(); render();
   $('previewNotice').hidden = isExtension;
   $('modeBadge').textContent = isExtension ? '本地保存' : '界面预览';
+  bind('chooseFiles',()=> $('filePicker').click());
+  $('filePicker').addEventListener('change',async ev=>{await addFiles([...ev.target.files]);ev.target.value='';});
+  const drop=$('fileDrop');
+  drop.addEventListener('dragover',ev=>{ev.preventDefault();if(!$('chooseFiles').disabled)drop.classList.add('drag-over');});
+  drop.addEventListener('dragleave',()=>drop.classList.remove('drag-over'));
+  drop.addEventListener('drop',async ev=>{ev.preventDefault();drop.classList.remove('drag-over');await addFiles([...ev.dataTransfer.files]);});
+  $('question').addEventListener('paste',async ev=>{
+    const files=[...(ev.clipboardData?.files||[])];if(files.length){ev.preventDefault();await addFiles(files);}
+  });
   for (const id of ['question','primary','reviewer','third','sequence','timeout','templateFirst','templateReview','templateFinal']) {
     $(id).addEventListener('input', () => {
       readForm(); render();
@@ -205,8 +247,10 @@ async function initialize() {
   }
   bind('start', async () => {
     if (!isExtension || lockedElsewhere || engine.locked) return;
-    if (engine.run && !confirm('开始一个新任务？当前工作台的过程记录将被替换；如需保留，请先导出 JSON。')) return;
+    if (engine.run && engine.run.status !== 'done' && !confirm('开始一个新任务？当前未完成的任务将被替换；如需接着处理，请点击“继续当前步骤”。')) return;
     readForm(); C.validate(config); imported = null;
+    RelayFiles.validate(config.attachments);
+    for(const file of config.attachments)await RelayFiles.get(file);
     await engine.begin(config); await engine.tick(); render();
   });
   bind('newTask', async () => {
@@ -216,7 +260,7 @@ async function initialize() {
       const r = engine.run;
       imported = {...C.importData({config: r, run: r, finalOut: r.finalOut}), previous: true};
     }
-    engine.run = null; taskWindow = null; config.q = ''; transient = null;
+    engine.run = null; taskWindow = null; config.q = ''; config.attachments=[]; transient = null;
     $('manual').value = ''; populateForm(); render(); await store();
     $('question').focus(); message('可以输入新问题；上次结果暂时保留在右侧，开始新互审后更新。');
   });
@@ -272,7 +316,7 @@ async function initialize() {
     if (!engine.run && imported) data.run = {outputs: imported.outputs};
     const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'}));
     const a = document.createElement('a'); a.href = url; a.download = 'ai-relay-' + new Date().toISOString().slice(0,10) + '.json'; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000); message('已导出任务数据。');
+    setTimeout(() => URL.revokeObjectURL(url), 1000); message('已导出文字、设置与附件清单；附件原文件需单独保留，换机后重新选择。');
   });
   $('import').addEventListener('change', async ev => {
     try {
@@ -282,22 +326,27 @@ async function initialize() {
       const data = C.importData(raw);
       if ((engine.run || config.q) && !confirm('用导入数据替换当前工作台内容？')) return;
       if(raw.layout)layout.set(raw.layout);
-      engine.run = null; imported = data; config = data.config; populateForm(); render(); await store(); message('导入成功；不会自动发送。');
+      engine.run = null; imported = data; config = {...data.config,attachments:[]}; populateForm(); render(); await store();message('导入成功；如有图片或文件，请重新选择附件。不会自动发送。');
     } catch (e) {message('导入失败：' + e.message, true);} finally {ev.target.value = '';}
   });
   bind('resetTemplates', async () => {config.templates = {...C.templates}; populateForm(); await store(); message('已恢复默认提示词。');});
   bind('clear', async () => {
     if (!confirm('清空此浏览器中的工作台记录和问题？模型网站上的聊天不会被删除。')) return;
-    engine.run = null; imported = null; config.q = ''; $('manual').value = ''; populateForm(); render(); await store(); message('本地记录已清空。');
+    addingFiles=true;engine.run = null; imported = null; config.q = ''; config.attachments=[]; $('manual').value = ''; populateForm(); render();
+    try{await store();await pruneFiles();message('本地记录与附件缓存已清空。');}finally{addingFiles=false;render();}
   });
   window.addEventListener('beforeunload', e => {
     if (engine.run?.status === 'running') {e.preventDefault(); e.returnValue = '';}
   });
   if (isExtension) {
+    // Startup is not evidence of a conflicting window. Only show the notice
+    // if an actual lock wait persists; queued acquisition remains automatic.
+    ownerNoticeTimer=setTimeout(()=>{checkingOwner=false;render();},1800);
     // Queue for ownership: when an older window closes this one must recover.
     navigator.locks.request('ai-relay-runner', async () => {
       // Re-read after acquisition, never resume using a stale waiting-window copy.
-      await loadSaved(); lockedElsewhere = false; transient = null;
+      await loadSaved(); lockedElsewhere = false; checkingOwner=false;clearTimeout(ownerNoticeTimer);transient = null;
+      await pruneFiles().catch(e=>message('附件缓存整理未完成：'+e.message,true));
       populateForm(); render();
       setInterval(async () => {try {await engine.tick(); render();} catch(e) {message(e.message, true);}}, 1500);
       await new Promise(() => {});

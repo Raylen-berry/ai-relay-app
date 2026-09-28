@@ -27,16 +27,16 @@ async function workbench(saved) {
     chrome:{runtime:{id:'relay',getURL:f=>'chrome-extension://relay/'+f},storage:{local:{
       get:async()=>({relay:structuredClone(storage)}),set:async value=>{storage=structuredClone(value.relay);}
     }},tabs:{create:async({url})=>newTab(url),get:async id=>tabs.get(id),update:async()=>{},
-      sendMessage:async(id,msg)=>{messages.push(msg);if(msg.type==='RELAY_SNAPSHOT')return {ok:true,protocol:4,input:true,inputOccupied:false,busy:false,url:tabs.get(id).url,answers:[]};return {ok:true};},
+      sendMessage:async(id,msg)=>{messages.push(msg);if(msg.type==='RELAY_SNAPSHOT')return {ok:true,protocol:5,input:true,inputOccupied:false,busy:false,url:tabs.get(id).url,answers:[]};return {ok:true};},
       remove:async id=>tabs.delete(id)
     },windows:{create:async({url})=>({id:1,tabs:[newTab(url)]}),update:async()=>{}}}
   });
-  for(const file of ['core.js','editor.js','engine.js','layout.js','app.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../extension',file),'utf8'),context);
+  for(const file of ['core.js','editor.js','engine.js','layout.js','files.js','app.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../extension',file),'utf8'),context);
   await turn();
   const grant=async()=>{owner();await turn();};
   const click=async id=>{const el=window.document.getElementById(id);assert.equal(!!el.disabled,false,id+' must be enabled');el.click();await turn();await turn();};
   const input=async text=>{const el=window.document.getElementById('question');assert.equal(!!el.disabled,false);el.value=text;el.dispatchEvent(new window.Event('input'));await turn();};
-  return {context,messages,grant,click,input,get:id=>window.document.getElementById(id),saved:()=>storage,replaceSaved:v=>{storage=structuredClone(v);},tick:async()=>{for(const fn of intervals)await fn();},cleanup:()=>vm.runInContext('clearTimeout(saveTimer)',context)};
+  return {context,messages,grant,click,input,get:id=>window.document.getElementById(id),saved:()=>storage,replaceSaved:v=>{storage=structuredClone(v);},tick:async()=>{for(const fn of intervals)await fn();},cleanup:()=>vm.runInContext('clearTimeout(saveTimer);clearTimeout(ownerNoticeTimer)',context)};
 }
 test('restored paused task permits editing; a new question preserves outputs without sending until Start',async()=>{
   const w=await workbench(paused('旧问题'));
@@ -56,7 +56,7 @@ test('restored paused task permits editing; a new question preserves outputs wit
 test('waiting workbench recovers ownership and loads newest saved data when original closes',async()=>{
   const w=await workbench(paused('旧窗口最初的数据'));
   try {
-    assert.equal(w.get('question').disabled,true);assert.equal(w.get('windowNotice').hidden,false);
+    assert.equal(w.get('question').disabled,true);assert.equal(w.get('windowNotice').hidden,true);
     w.replaceSaved(paused('原窗口关闭前的新数据'));
     await w.grant();
     assert.equal(!!w.get('question').disabled,false);assert.equal(w.get('windowNotice').hidden,true);

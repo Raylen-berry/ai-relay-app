@@ -6,7 +6,14 @@
   if (!adapter) return;
   const ledger = new Map();
   const cancelled = new Set();
-  const visible = e => !!e && !!e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden';
+  const visible = e => {
+    if (!e || !e.getClientRects().length) return false;
+    for (let node=e; node; node=node.parentElement) {
+      const style=getComputedStyle(node);
+      if (style.visibility==='hidden' || style.display==='none' || style.opacity==='0') return false;
+    }
+    return true;
+  };
   function select(selectors, requireVisible = true) {
     for (const selector of selectors) {
       const nodes = [...document.querySelectorAll(selector)].filter(e => !requireVisible || visible(e));
@@ -18,18 +25,35 @@
   const inputText = RelayEditor.read;
   const enabled = e => e && !e.disabled && e.getAttribute('aria-disabled') !== 'true' && !/(^|[\s-])disabled($|\s)/.test(e.className);
   const normalized = RelayEditor.normalize;
+  function attachmentName(card) {
+    const label=card.querySelector(adapter.attachmentName), img=card.querySelector('img');
+    let name=card.getAttribute('data-file-name') || card.querySelector('[data-file-name]')?.getAttribute('data-file-name') ||
+      label?.getAttribute('title') || label?.getAttribute('aria-label') || label?.textContent ||
+      card.getAttribute('aria-label') || img?.getAttribute('alt');
+    // Kimi displays a document's extension separately, and images have an empty
+    // alt. Read the filename in the displayed image URL, never its signed token.
+    if (adapter.name==='Kimi') {
+      const ext=normalized(card.querySelector('.file-ext')?.textContent).toLowerCase();
+      if (name && ext && !name.toLowerCase().endsWith('.'+ext)) name+='.'+ext;
+      if (!name) {
+        const match=img?.getAttribute('src')?.match(/[?&]filename=([^&]*)/);
+        if (match) { try {name=decodeURIComponent(match[1].replace(/\+/g,' '));} catch {} }
+      }
+    }
+    return normalized(name || card.textContent);
+  }
   // Only inspect the current composer, never attachments in conversation history.
   function attachments(box = input()) {
     const root = box?.closest(adapter.composer);
-    const cards = root ? [...root.querySelectorAll(adapter.attachment)].filter(visible) : [];
-    const names = cards.map(e => e.getAttribute('data-file-id') || e.getAttribute('aria-label') ||
-      normalized(e.querySelector(adapter.attachmentName)?.textContent) || normalized(e.textContent));
+    const candidates = root ? [...root.querySelectorAll(adapter.attachment)].filter(visible) : [];
+    const cards = candidates.filter(e=>!candidates.some(parent=>parent!==e && parent.contains(e)));
+    const names = cards.map(attachmentName);
     const pending = cards.some(e => e.matches(adapter.attachmentPending) ||
       [...e.querySelectorAll(adapter.attachmentPending)].some(visible) ||
       /等待解析|解析中|上传中|正在上传|正在处理|uploading|processing/i.test(e.innerText || ''));
     const failed = cards.some(e => /(^|\s)(error|failed)(\s|$)/.test(e.className) ||
       /上传失败|解析失败|无法上传|upload failed|failed to upload/i.test(e.innerText || ''));
-    return {count:cards.length, signature:JSON.stringify(names.sort()), pending, failed};
+    return {count:cards.length, names, signature:JSON.stringify([...names].sort()), pending, failed};
   }
   function busy() {
     if (select(adapter.busy).length) return true;
@@ -49,7 +73,7 @@
     const entries = select(adapter.answer, false);
     const files = attachments(box);
     return {
-      protocol: 4, name: adapter.name, url: location.href, input: !!box,
+      protocol: 5, name: adapter.name, url: location.href, input: !!box,
       inputOccupied: !!inputText(box) || !!files.count, draft: inputText(box), attachments:files,
       sendFound: !!findSendButton(box), busy: busy(),
       userMessages: select(['[data-message-author-role="user"]'], false).map(e => ({text: inputText(e)})),
@@ -86,10 +110,11 @@
     const reuseFiles = initialFiles.count > 0 && msg.attachmentSignature === initialFiles.signature;
     if (initialFiles.count && !reuseFiles) return {ok:false, beforeClick:true, error:'网页已有附件，请先检查当前步骤再继续。'};
     const reuseDraft = !!existing && existing === normalized(msg.prompt);
+    const reuseComposed = msg.userFiles && msg.composedSignature === initialFiles.signature && (!existing || reuseDraft);
     const repairDraft = adapter.name === 'Kimi' && RelayEditor.lostLineBreaks(existing, msg.prompt, msg.marker);
     if (existing && !reuseDraft && !repairDraft) return {ok: false, beforeClick: true, error: '网页输入框已有其他内容；请检查后清空，避免覆盖草稿。'};
     ledger.set(msg.taskId, {ok: false, uncertain: true, error: '正在准备发送，请先检查网页。'});
-    if (!reuseDraft && !reuseFiles) {
+    if (!reuseDraft && !reuseComposed && (!reuseFiles || msg.userFiles)) {
       box.focus();
       if (box instanceof HTMLTextAreaElement || box instanceof HTMLInputElement) {
         const proto = box instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
@@ -118,13 +143,19 @@
       }
       for (let i = 0; i < 16; i++) {
         await sleep(125);
-        if (RelayEditor.same(inputText(input()), msg.prompt) || attachments().count) break;
+        if (RelayEditor.same(inputText(input()), msg.prompt) || (msg.userFiles ? attachments().count > initialFiles.count : attachments().count)) break;
       }
     }
     let files = attachments();
     const fileSignature = files.count ? files.signature : null;
     const contentMatches = () => {
       const draft = inputText(input()), currentFiles = attachments();
+      if (msg.userFiles) {
+        // Selected files must survive prompt insertion. An empty draft is only
+        // valid if the site converted that prompt into an additional TXT card.
+        if (!initialFiles.names.every(name=>currentFiles.names.includes(name))) return false;
+        if (!RelayEditor.same(draft,msg.prompt) && !((currentFiles.count>initialFiles.count || (reuseComposed && msg.composedAsFile)) && !normalized(draft))) return false;
+      }
       if (fileSignature) return currentFiles.count > 0 && currentFiles.signature === fileSignature &&
         (!normalized(draft) || RelayEditor.same(draft, msg.prompt));
       return !currentFiles.count && RelayEditor.same(draft, msg.prompt);
@@ -145,7 +176,8 @@
     }
     if (!button || cancelled.has(msg.runId)) {
       ledger.delete(msg.taskId);
-      return {ok: false, beforeClick: true, draftRetained: true, error: files.failed
+      return {ok: false, beforeClick: true, draftRetained: true,
+        ...(msg.userFiles && contentMatches() ? {composedSignature:fileSignature,composedAsFile:!normalized(inputText(input()))} : {}), error: files.failed
         ? '附件上传或解析失败，未点击发送。请检查模型网页后继续。'
         : files.pending ? '附件仍在上传或解析，已保留。完成后点击“继续当前步骤”。'
         : '发送按钮不可用或待发内容发生变化；请检查网页后继续当前步骤。'};
@@ -174,7 +206,8 @@
     button.click();
     if (!await waitForDelivery()) {
       const retryableDraft = !cancelled.has(msg.runId) && contentMatches();
-      const result = {ok: false, uncertain: true, retryableDraft, error: retryableDraft
+      const result = {ok: false, uncertain: true, retryableDraft,
+        ...(msg.userFiles && retryableDraft ? {composedSignature:fileSignature,composedAsFile:!normalized(inputText(input()))} : {}), error: retryableDraft
         ? '内容已填入，但网页没有确认发送。任务已暂停；确认网页没有发出后，可点“继续当前步骤”重试。'
         : '发送状态未确认，任务已暂停。请检查网页；继续时先等待结果，避免重复发送。'};
       if (retryableDraft) ledger.delete(msg.taskId); else ledger.set(msg.taskId, result);
@@ -184,11 +217,15 @@
     ledger.set(msg.taskId, result);
     return result;
   }
+  const uploader = RelayUpload.create({input,attachments,busy,cancelled,sleep,adapter});
   chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     if (sender.id !== chrome.runtime.id || !msg || !msg.type?.startsWith('RELAY_')) return;
     if (msg.type === 'RELAY_CANCEL') {cancelled.add(msg.runId); reply({ok: true}); return;}
     if (msg.type === 'RELAY_RESUME') {cancelled.delete(msg.runId); reply({ok: true}); return;}
     if (msg.type === 'RELAY_SNAPSHOT') {reply({ok: true, ...snapshot()}); return;}
+    if (msg.type.startsWith('RELAY_FILES_')) {
+      uploader.receive(msg).then(reply).catch(e=>reply({ok:false,error:e.message}));return true;
+    }
     if (msg.type === 'RELAY_SEND') {
       send(msg).then(reply).catch(e => reply({ok: false, uncertain: true, error: e.message}));
       return true;

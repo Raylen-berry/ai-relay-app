@@ -1,9 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-  <title>Relay — 循环与自动执行</title>
-  <circle cx="64" cy="64" r="60" fill="#253331"/>
-  <g fill="none" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M33 55C38 29 73 20 94 40M94 26V40H80" stroke="#ECF2E9"/>
-    <path d="M95 73C90 99 55 108 34 88M34 102V88H48" stroke="#8CD4BD"/>
-    <path d="M68 49L54 67H64L60 80L77 60H66Z" stroke="#D8BB7D" stroke-width="2.8"/>
-  </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 128 128"><title>轨道接力</title><circle cx="64" cy="64" r="60" fill="#173A36"/><g fill="none" stroke="#BAEEDB" stroke-width="3.8"><ellipse cx="64" cy="64" rx="40" ry="23" transform="rotate(-36 64 64)"/><path d="M43 33C74 14 103 44 88 80C81 96 63 102 48 94" stroke="#F2F4DE"/></g><circle cx="31" cy="76" r="7" fill="#173A36" stroke="#BAEEDB" stroke-width="3.5"/><path d="M79 30L88 28L84 38" fill="none" stroke="#F2F4DE" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="66" cy="65" r="5" fill="#F2F4DE"/></svg>

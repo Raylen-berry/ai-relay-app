@@ -8,7 +8,7 @@ function page(host, html) {
   let receive, clicks=0;
   window.Element.prototype.getClientRects=()=>[{width:100,height:30}];
   class DataTransfer {
-    constructor(){this.data=new Map();}
+    constructor(){this.data=new Map();this.files=[];this.items={add:f=>this.files.push(f)};}
     setData(type,text){this.data.set(type,text);}
     getData(type){return this.data.get(type)||'';}
   }
@@ -20,11 +20,11 @@ function page(host, html) {
     HTMLTextAreaElement:window.HTMLTextAreaElement,HTMLInputElement:window.HTMLInputElement,HTMLButtonElement:window.HTMLButtonElement,
     KeyboardEvent:window.KeyboardEvent || window.Event,
     Event:window.Event,InputEvent:window.InputEvent || window.Event,
-    DataTransfer,ClipboardEvent,
-    getComputedStyle:()=>({visibility:'visible'}),setTimeout:fn=>setImmediate(fn),console,
+    DataTransfer,ClipboardEvent,File,atob,
+    getComputedStyle:e=>({visibility:e.style.visibility||'visible',opacity:e.style.opacity||'1',display:e.style.display||'block'}),setTimeout:fn=>setImmediate(fn),console,
     chrome:{runtime:{id:'relay',onMessage:{addListener:fn=>receive=fn}}}
   });
-  for(const name of ['adapters.js','editor.js','content.js']) vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../extension',name),'utf8'),context);
+  for(const name of ['adapters.js','editor.js','upload.js','content.js']) vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../extension',name),'utf8'),context);
   const sendButton=window.document.querySelector('[data-send]');
   sendButton?.addEventListener('click',()=>{clicks++;});
   return {document:window.document,window,clicks:()=>clicks,message:msg=>new Promise(resolve=>receive(msg,{id:'relay'},resolve))};
@@ -77,7 +77,7 @@ test('long contenteditable paragraphs preserve blank lines, indentation and Mark
   // Browser innerText is layout dependent; the editor document is not.
   Object.defineProperty(box,'innerText',{get:()=>lines.join('\n\n')});
   assert.equal(E.read(box),prompt);
-  const snap=await p.message({type:'RELAY_SNAPSHOT'});assert.equal(snap.draft,prompt);assert.equal(snap.protocol,4);
+  const snap=await p.message({type:'RELAY_SNAPSHOT'});assert.equal(snap.draft,prompt);assert.equal(snap.protocol,5);
   p.document.querySelector('[data-send]').addEventListener('click',()=>{box.replaceChildren();});
   const result=await p.message({type:'RELAY_SEND',taskId:'long',runId:'run',prompt});
   assert.equal(result.ok,true);assert.equal(p.clicks(),1);
@@ -241,4 +241,116 @@ test('attachment replaced while waiting for the send button is not submitted',as
   setImmediate(()=>{card.querySelector('p').textContent='changed.txt';button.classList.remove('disabled');});
   const r=await p.message({type:'RELAY_SEND',taskId:'changed-file',runId:'run',prompt:'long material',attachmentSignature:s.attachments.signature});
   assert.equal(r.beforeClick,true);assert.equal(p.clicks(),0);
+});
+
+function uploadPage(host) {
+  const p=filePage(host),picker=p.document.createElement('input');picker.type='file';picker.multiple=true;
+  p.box.parentElement.append(picker);
+  let uploads=0;
+  const button=p.document.querySelector('[data-send]');button.classList.add('disabled');button.disabled=true;
+  picker.addEventListener('change',()=>{
+    uploads++;p.root.replaceChildren();
+    for(const file of picker.files) {
+      const temp=p.document.createElement('div');temp.innerHTML=liveCard(host,file);p.root.append(temp.firstElementChild);
+    }
+    button.disabled=false;button.classList.remove('disabled');
+  });
+  if(host==='www.kimi.com')p.box.addEventListener('paste',ev=>{p.box.textContent=ev.clipboardData.getData('text/plain');});
+  button.addEventListener('click',()=>{p.root.replaceChildren();if(p.box.tagName==='TEXTAREA')p.box.value='';else p.box.textContent='';button.disabled=true;button.classList.add('disabled');});
+  return {...p,picker,uploads:()=>uploads};
+}
+// Minimal fixtures from Edge's actual ready-to-send cards on 2026-09-28.
+// DeepSeek retains a loading SVG behind an opacity:0 ancestor after upload.
+function liveCard(host,file) {
+  const image=file.type.startsWith('image/');
+  if(host==='www.kimi.com')return image
+    ? `<div class="image-thumbnail middle success"><span class="image-wrapper"><img alt="" src="https://www.kimi.com/test-image?filename=${encodeURIComponent(file.name)}&amp;t=t"></span></div>`
+    : `<div class="file-card-container normal success"><img alt="txt"><div><p class="file-card-info-name">${file.name.replace(/\.[^.]+$/,'')}</p><span class="file-ext">${file.name.split('.').pop().toUpperCase()}</span></div></div>`;
+  if(host==='chat.deepseek.com')return image
+    ? `<div class="d5fa3d1b _183e647"><div><img alt="${file.name}"></div><div class="fb3b3771" style="opacity:0"><div><div class="ds-loading"></div></div></div></div>`
+    : `<div class="_25c7358 dafb6286"><div class="e70accd6">${file.name}</div></div>`;
+  return image
+    ? `<div class="group/composer-attachment composer-attachment-surface" aria-label="${file.name}"><span><img alt="${file.name}"></span><button aria-label="移除 ${file.name}"></button></div>`
+    : `<span class="group/composer-attachment"><span class="composer-attachment-surface">${file.name}</span><button class="composer-attachment-surface" aria-label="${file.name}"></button><button aria-label="移除 ${file.name}"></button></span>`;
+}
+const chosenFiles=[{id:'p',name:'test.png',size:3,type:'image/png'},{id:'d',name:'notes.txt',size:3,type:'text/plain'}];
+async function prepareChosen(p,files=chosenFiles) {
+  const base={batchId:'batch',runId:'run'};
+  const begin=await p.message({...base,type:'RELAY_FILES_BEGIN',files});assert.equal(begin.ok,true,begin.error);
+  for(let i=0;i<files.length;i++)assert.equal((await p.message({...base,type:'RELAY_FILES_CHUNK',index:i,offset:0,data:Buffer.from('abc').toString('base64')})).ok,true);
+  return p.message({...base,type:'RELAY_FILES_COMMIT'});
+}
+for(const host of Object.keys(filePages))test(host+' uploads selected image and document once, preserves filenames and sends accompanying instructions',async()=>{
+  const p=uploadPage(host),prepared=await prepareChosen(p);assert.equal(prepared.ok,true,prepared.error);
+  assert.equal(p.uploads(),1);assert.deepEqual(p.picker.files.map(f=>f.name),['test.png','notes.txt']);
+  assert.equal(await p.picker.files[1].text(),'abc');
+  const snap=await p.message({type:'RELAY_SNAPSHOT'});assert.equal(snap.attachments.count,2);
+  const again=await p.message({type:'RELAY_FILES_BEGIN',batchId:'batch',runId:'run',files:chosenFiles,recovery:true});
+  assert.equal(again.signature,prepared.signature);assert.equal(p.uploads(),1);
+  let submitted='';p.document.querySelector('[data-send]').addEventListener('click',()=>{});
+  if(host==='www.kimi.com')p.box.addEventListener('paste',ev=>submitted=ev.clipboardData.getData('text/plain'));
+  else p.box.addEventListener('input',()=>submitted=p.box.value);
+  const r=await p.message({type:'RELAY_SEND',taskId:'with-selected',runId:'run',prompt:'请同时核对图片和文档【接力结束_files】',userFiles:true,attachmentSignature:prepared.signature});
+  assert.equal(r.ok,true,r.error);assert.match(submitted,/同时核对图片和文档/);assert.equal(p.clicks(),1);
+});
+
+test('incomplete bytes, unsupported types, cancellation and changed drafts cannot upload files',async()=>{
+  for(const mode of ['incomplete','unsupported','cancel','changed']) {
+    const p=uploadPage('chatgpt.com'),base={runId:'run',batchId:'batch'};
+    if(mode==='unsupported')p.picker.setAttribute('accept','application/pdf');
+    const begin=await p.message({...base,type:'RELAY_FILES_BEGIN',files:chosenFiles});
+    if(mode==='unsupported'){assert.equal(begin.ok,false);continue;}
+    if(mode!=='incomplete')for(let i=0;i<2;i++)await p.message({...base,type:'RELAY_FILES_CHUNK',index:i,offset:0,data:'YWJj'});
+    if(mode==='changed')p.box.value='用户的新草稿';
+    if(mode==='cancel')await p.message({type:'RELAY_CANCEL',runId:'run'});
+    assert.equal((await p.message({...base,type:'RELAY_FILES_COMMIT'})).ok,false);assert.equal(p.uploads(),0);
+  }
+});
+
+test('recovery without matching attachments does not inject or silently claim an upload',async()=>{
+  const p=uploadPage('chatgpt.com');
+  const result=await p.message({type:'RELAY_FILES_BEGIN',files:chosenFiles,runId:'run',batchId:'lost',recovery:true});
+  assert.equal(result.ok,false);assert.match(result.error,/不会重复上传/);assert.equal(p.uploads(),0);
+});
+
+test('selected files plus prompt converted to TXT survive a parsing pause without repasting',async()=>{
+  const p=uploadPage('www.kimi.com'),prepared=await prepareChosen(p);
+  let pastes=0;
+  p.box.addEventListener('paste',()=>{
+    pastes++;p.box.textContent='';const temp=p.document.createElement('div');temp.innerHTML=filePages['www.kimi.com'].card.replaceAll('relay.txt','prompt.txt');
+    temp.firstElementChild.classList.add('parsing');p.root.append(temp.firstElementChild);
+  });
+  const msg={type:'RELAY_SEND',taskId:'txt-selected',runId:'run',prompt:'长提示词',userFiles:true,attachmentSignature:prepared.signature};
+  const first=await p.message(msg);assert.equal(first.ok,false);assert.equal(first.composedAsFile,true);assert.equal(p.clicks(),0);
+  p.root.querySelector('.parsing').classList.remove('parsing');
+  const result=await p.message({...msg,attachmentSignature:first.composedSignature,composedSignature:first.composedSignature,composedAsFile:true});
+  assert.equal(result.ok,true,result.error);assert.equal(pastes,1);assert.equal(p.uploads(),1);assert.equal(p.clicks(),1);
+});
+
+test('new ChatGPT composer, assistant body and stop button are recognized without old IDs',async()=>{
+  const p=page('chatgpt.com','<main><div><h4>你说：</h4><div>用户问题</div></div><div><h4 data-conversation-role="assistant">ChatGPT 说：</h4><div data-chatgpt-selection-message-id="answer-id"><div class="MarkdownRoot-rZKhxa">回答【接力结束_new】</div></div></div><form><div data-composer-markdown contenteditable="true"></div><button aria-label="停止"></button></form></main>');
+  let s=await p.message({type:'RELAY_SNAPSHOT'});
+  assert.equal(s.input,true);assert.equal(s.busy,true);assert.equal(s.answers.length,1);assert.equal(s.answers[0].text,'回答【接力结束_new】');
+  p.document.querySelector('button').setAttribute('aria-label','发送');
+  s=await p.message({type:'RELAY_SNAPSHOT'});assert.equal(s.busy,false);assert.equal(s.sendFound,true);
+});
+
+test('Kimi live split-extension names and URL image names recover existing mixed attachments',async()=>{
+  const p=uploadPage('www.kimi.com'),files=[{...chosenFiles[0],name:'测试图 空格.png'},{...chosenFiles[1],name:'notes.TXT'}];
+  const prepared=await prepareChosen(p,files);assert.equal(prepared.ok,true,prepared.error);
+  const s=await p.message({type:'RELAY_SNAPSHOT'});assert.deepEqual(Array.from(s.attachments.names),['测试图 空格.png','notes.txt']);
+  const recovered=await p.message({type:'RELAY_FILES_BEGIN',runId:'run',batchId:'new-after-reload',files,recovery:true});
+  assert.equal(recovered.ok,true);assert.equal(p.uploads(),1);
+});
+
+test('overlapping card selectors count an attachment once and visible loading still blocks sending',async()=>{
+  const p=uploadPage('chatgpt.com');await prepareChosen(p);
+  p.root.firstElementChild.querySelector('span').setAttribute('data-testid','attachment');
+  assert.equal((await p.message({type:'RELAY_SNAPSHOT'})).attachments.count,2);
+  const d=uploadPage('chat.deepseek.com');await prepareChosen(d);
+  assert.equal((await d.message({type:'RELAY_SNAPSHOT'})).attachments.pending,false);
+  d.root.querySelector('.fb3b3771').style.opacity='1';
+  const snap=await d.message({type:'RELAY_SNAPSHOT'});assert.equal(snap.attachments.pending,true);
+  const r=await d.message({type:'RELAY_SEND',taskId:'visible-spinner',runId:'run',prompt:'附件测试',userFiles:true,attachmentSignature:snap.attachments.signature});
+  assert.equal(r.ok,false);assert.equal(d.clicks(),0);
 });

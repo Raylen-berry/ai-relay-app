@@ -13,10 +13,59 @@ function harness() {
   const e = new Engine(io,async r=>snapshots.push(structuredClone(r)),()=>time,()=>String(++seq));
   return {e,io,tabs,sent,snapshots,activated,closed,advance:ms=>time+=ms,config:{q:'问题',primary:'deepseek',reviewer:'chatgpt',timeout:5,templates:{...C.templates}}};
 }
+function withFiles(h) {
+  h.config.attachments=[{id:'img',name:'test.png',type:'image/png',size:12},{id:'doc',name:'notes.txt',type:'text/plain',size:9}];
+  const uploads=[];h.uploads=uploads;
+  h.io.upload=async(id,files,batchId,runId,recovery)=>{
+    uploads.push({id,batchId,recovery});
+    const signature=JSON.stringify(files.map(f=>f.name).sort());
+    Object.assign(h.tabs.get(id),{inputOccupied:true,attachments:{count:files.length,names:files.map(f=>f.name),signature}});
+    return {ok:true,signature};
+  };
+  const send=h.io.send;h.io.send=async(id,p)=>{const result=await send(id,p);Object.assign(h.tabs.get(id),{inputOccupied:false,attachments:{count:0,names:[],signature:'[]'}});return result;};
+  return h;
+}
 async function answer(h,body) {
   const p=h.sent.at(-1);h.tabs.get(p.id).answers.push({text:body+p.marker});
   await h.e.tick();h.advance(7000);await h.e.tick();
 }
+
+test('1-2-1-3-1 sends source files exactly once to each distinct conversation',async()=>{
+  const h=withFiles(harness());h.config.third='kimi';h.config.sequence='1-2-1-3-1';
+  await h.e.begin(h.config);
+  for(let i=0;i<5;i++){await h.e.tick();await answer(h,i===4?'【最终答案】已复核':'结果'+i);}
+  assert.equal(h.e.run.status,'done');assert.equal(h.uploads.length,3);
+  assert.equal(new Set(h.uploads.map(x=>x.id)).size,3);
+  assert.deepEqual(h.sent.map(x=>x.userFiles),[true,true,false,true,false]);
+  assert.equal(h.sent[0].id,h.sent[2].id);assert.equal(h.sent[0].id,h.sent[4].id);
+  assert.match(h.sent[4].prompt,/test.png/);
+});
+
+test('file upload is not repeated for long prompt segments or after window restoration',async()=>{
+  const h=withFiles(harness());h.config.q='长问题'.repeat(1800);await h.e.begin(h.config);await h.e.tick();
+  let old=structuredClone(h.e.run);h.e.restore(old);await h.e.resume();
+  let guard=0;
+  while(h.e.run.stageIndex===0&&guard++<25){await answer(h,'收到');if(h.e.run.stageIndex===0)await h.e.tick();}
+  assert.equal(h.e.run.stageIndex,1);assert.equal(h.uploads.length,1);
+  assert.equal(h.sent.filter(s=>s.userFiles).length,1);
+});
+
+test('uncertain file upload survives restore and recovers without automatic reinjection',async()=>{
+  const h=withFiles(harness()),upload=h.io.upload;let attempt=0;
+  h.io.upload=async(...args)=>{if(!attempt++){await upload(...args);const e=new Error('lost upload acknowledgement');e.uploadUncertain=true;throw e;}return upload(...args);};
+  await h.e.begin(h.config);await h.e.tick();assert.equal(h.e.run.status,'paused');assert.equal(h.sent.length,0);
+  h.e.restore(structuredClone(h.e.run));await h.e.resume();await h.e.tick();
+  assert.deepEqual(h.uploads.map(u=>u.recovery),[false,true]);assert.equal(h.sent.length,1);
+});
+
+test('pause during file transfer cannot dispatch a prompt; changed conversation never reuses attachment status',async()=>{
+  const h=withFiles(harness()),upload=h.io.upload;
+  h.io.upload=async(...args)=>{await h.e.pause();return upload(...args);};
+  await h.e.begin(h.config);await h.e.tick();assert.equal(h.sent.length,0);assert.equal(h.e.run.status,'paused');
+  h.io.upload=upload;await h.e.resume();await h.e.tick();await answer(h,'初稿');await h.e.tick();await answer(h,'审核');
+  h.tabs.get(h.e.run.tabs.primary.id).answers=[];
+  await h.e.tick();assert.equal(h.e.run.status,'paused');assert.equal(h.uploads.length,2);assert.equal(h.sent.length,2);
+});
 test('full three-stage chain preserves context and returns to the original tab', async()=>{
   const h=harness();await h.e.begin(h.config);await h.e.tick();
   assert.equal(h.sent.length,1);await answer(h,'初稿');

@@ -43,7 +43,7 @@ $relayShell = New-Object -ComObject WScript.Shell
 foreach ($relayShortcutDir in @([Environment]::GetFolderPath('Desktop'),[Environment]::GetFolderPath('Programs'))) {
     $relayShortcut = $relayShell.CreateShortcut((Join-Path $relayShortcutDir 'AI 互审.lnk'))
     $relayShortcut.TargetPath = $relayBrowserPath
-    $relayShortcut.Arguments = '--app="chrome-extension://' + $relayId + '/app.html"'
+    $relayShortcut.Arguments = '--app="chrome-extension://' + $relayId + '/open.html"'
     $relayShortcut.WorkingDirectory = $relayDestination
     $relayShortcut.IconLocation = (Join-Path $relayDestination ('assets\relay-' + $newRelay.version + '.ico'))
     $relayShortcut.Description = 'AI 互审 Relay：回答、审核、定稿'

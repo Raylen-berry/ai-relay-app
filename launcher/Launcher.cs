@@ -61,7 +61,7 @@ class Launcher : Form {
     }
     void OpenApp() {
         if(extensionId.Length!=32)throw new Exception("缺少应用配置，请完整解压压缩包后再打开。");
-        LaunchBrowser("chrome-extension://"+extensionId+"/app.html",true);
+        LaunchBrowser("chrome-extension://"+extensionId+"/open.html",true);
     }
     void InstallApp() {
         string destination=File.Exists(Path.Combine(root,"installed.txt"))?root:Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Programs","AI-Relay");

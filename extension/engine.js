@@ -108,6 +108,8 @@
     async markManualSent() {
       if (this.run?.status !== 'paused' || !this.run.pending) throw new Error('请先手动接管当前步骤。');
       const p = this.run.pending;
+      const tab = this.run.tabs[this.run.route[this.run.stageIndex]];
+      if (tab?.filesState) tab.filesState.phase='sent';
       p.phase = p.parts && p.partIndex < p.parts.length - 1 ? 'waitingPart' : 'waiting';
       p.started = this.now(); this.observation = null;
       this.log('用户已手动发送当前片段，继续从网页收取回答。');
@@ -117,6 +119,8 @@
       const stage = C.stageAt(this.run);
       if (!text.trim()) throw new Error('本轮回答为空，不能进入下一步。');
       if (stage === 'final' && !C.extractFinal(text)) throw new Error('最终答案标记后没有内容，请补全后再继续。');
+      const currentTab=this.run.tabs[this.run.route[this.run.stageIndex]];
+      if(currentTab?.filesState)currentTab.filesState.phase='sent';
       this.run.outputs[stage] = text;
       this.run.turns.push(text);
       this.log(C.labels[stage] + '完成，已保存。');
@@ -175,6 +179,7 @@
         const waitingPart = !!piece.marker;
         const submitted = [...snap.answers, ...(snap.userMessages || [])].some(a => a.text.includes(currentMarker));
         if (p.phase === 'prepared' && (submitted || (p.draftRetained && !snap.inputOccupied))) {
+          if(tab.filesState)tab.filesState.phase='sent';
           p.phase = waitingPart ? 'waitingPart' : 'waiting'; p.started = this.now();
           this.log('检测到本轮提示词已由用户发送，继续收取回答，不再重复发送。');
           await this.save();
@@ -182,6 +187,35 @@
         if (p.phase === 'prepared') {
           if (!snap.input) throw new Error('未找到网页输入框，请完成登录后继续。');
           if (snap.busy) throw new Error('网页正在生成，请等待完成后继续。');
+          const previous=p.partIndex ? p.parts[p.partIndex-1].marker : tab.previousMarker;
+          if(previous && !snap.answers.some(a=>a.text.includes(previous)))throw new Error('当前网页已离开本任务的原对话。请返回原对话后继续，以复用已发送的附件。');
+          let selectedFiles = false;
+          if (this.run.attachments?.length && tab.filesState?.phase !== 'sent') {
+            if (p.partIndex) throw new Error('附件状态缺失，请先手动检查当前模型会话。');
+            const recovery=!!tab.filesState;
+            tab.filesState ||= {batchId:this.run.id + ':' + role,phase:'uploading'};
+            await this.save();
+            await this.io.activate(tab.id);
+            if(!this.active())return;
+            this.log('正在为 '+C.providers[this.run[role]].name+' 的本会话准备附件；后续返回时复用。');
+            try {
+              const ready=tab.filesState.phase==='attached' && snap.attachments?.count &&
+                snap.attachments.signature===(p.composedSignature || tab.filesState.signature);
+              if(!ready) {
+                const uploaded=await this.io.upload(tab.id,this.run.attachments,tab.filesState.batchId,this.run.id,recovery,()=>this.active());
+                if(!uploaded?.ok)throw new Error(uploaded?.error||'附件未确认。');
+                tab.filesState.phase='attached';tab.filesState.signature=uploaded.signature;
+              }
+            } catch(e) {
+              if(e.uploadUncertain===false)delete tab.filesState;
+              throw e;
+            }
+            await this.save();
+            if(!this.active())return;
+            snap=await this.io.snapshot(tab.id,this.run[role]);
+            if(snap.attachments?.signature!==(p.composedSignature || tab.filesState.signature))throw new Error('已准备的附件发生变化，请检查后继续。');
+            selectedFiles=true;
+          }
           const repairDraft = this.run[role] === 'kimi' && E.lostLineBreaks(snap.draft, piece.prompt, currentMarker);
           const attachedDraft = snap.attachments?.count > 0 && (!E.normalize(snap.draft) || samePrompt(snap.draft, p));
           if (snap.inputOccupied && !samePrompt(snap.draft, p) && !repairDraft && !attachedDraft) {
@@ -199,15 +233,17 @@
           if (!this.active()) {p.phase = 'prepared'; await this.save(); return;}
           let ack;
           try { ack = await this.io.send(tab.id, {...p, taskId:p.taskId + ':' + (p.partIndex || 0), prompt:piece.prompt, marker:currentMarker, runId: this.run.id,
-            attachmentSignature:attachedDraft ? snap.attachments.signature : undefined}); }
+            attachmentSignature:attachedDraft ? snap.attachments.signature : undefined,userFiles:selectedFiles}); }
           catch { throw new Error('发送状态未能确认。请检查任务网页；继续只会等待结果，不会重复点击发送。'); }
           if (!ack.ok) {
             if (ack.beforeClick || ack.retryableDraft) {
               p.phase = 'prepared'; p.draftRetained = !!(ack.draftRetained || ack.retryableDraft);
+              if(ack.composedSignature) {p.composedSignature=ack.composedSignature;p.composedAsFile=ack.composedAsFile;}
             }
             throw new Error(ack.error || '发送未完成，请检查任务页面。');
           }
           p.phase = waitingPart ? 'waitingPart' : 'waiting';
+          if(selectedFiles)tab.filesState.phase='sent';
           if (ack.attachment) this.log('TXT / 文件附件已发送，网页已确认接收。');
           this.log(waitingPart ? `已发送材料第 ${p.partIndex + 1}/${p.parts.length} 段，等待确认。` : '已点击发送，等待完整回答。'); await this.save();
           return;
@@ -215,6 +251,7 @@
         if (!this.active()) return;
         this.observation = C.observe(this.observation, snap, currentMarker, this.now(), waitingPart ? 1000 : 6000);
         if (this.observation.done) {
+          if(tab.filesState)tab.filesState.phase='sent';
           if (waitingPart) {
             p.partIndex++; p.phase = 'prepared'; p.started = this.now(); p.draftRetained = false;
             this.observation = null;
