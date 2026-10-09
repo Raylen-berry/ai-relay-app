@@ -354,3 +354,12 @@ test('overlapping card selectors count an attachment once and visible loading st
   const r=await d.message({type:'RELAY_SEND',taskId:'visible-spinner',runId:'run',prompt:'附件测试',userFiles:true,attachmentSignature:snap.attachments.signature});
   assert.equal(r.ok,false);assert.equal(d.clicks(),0);
 });
+
+test('ChatGPT nested selection wrapper reads only assistant answers in live October layout',async()=>{
+  const p=page('chatgpt.com','<main><div><h4 data-conversation-role="user">你说：</h4><div><div data-chatgpt-selection-message-id="user"><div>USER_ONLY【接力结束_oct】</div></div></div></div><div><h4 data-conversation-role="assistant">ChatGPT 说：</h4><div><div class="thinking">THINKING_ONLY</div><div data-chatgpt-selection-message-id="first"><div class="MarkdownRoot"><div class="DilResponseRoot">第一段正式回答</div></div></div></div></div><div><h4 data-conversation-role="user">你说：</h4><div>USER_ONLY 第二次问题</div></div><div><h4 data-conversation-role="assistant">ChatGPT 说：</h4><div><div><div data-chatgpt-selection-message-id="second"><div class="MarkdownRoot"><div class="DilResponseRoot">审核完成【接力结束_oct】</div></div></div></div></div></div><form><div data-composer-markdown contenteditable="true"></div><button aria-label="发送"></button></form></main>');
+  const snap=await p.message({type:'RELAY_SNAPSHOT'});
+  assert.equal(snap.answers.length,2);
+  assert.equal(snap.answers[0].text,'第一段正式回答');
+  assert.equal(snap.answers[1].text,'审核完成【接力结束_oct】');
+  assert.ok(snap.answers.every(answer=>!answer.text.includes('USER_ONLY')&&!answer.text.includes('THINKING_ONLY')));
+});

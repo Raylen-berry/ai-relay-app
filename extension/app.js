@@ -75,6 +75,16 @@ function render() {
   const paused = r?.status === 'paused';
   renderTiming(r);
   for (const id of ['question','primary','reviewer','third','sequence','timeout','templateFirst','templateReview','templateFinal','resetTemplates']) $(id).disabled = running || lockedElsewhere || engine?.locked;
+  let usesThird = false;
+  try {usesThird = C.routeFor(config).includes('third');} catch {}
+  $('third').disabled = $('sequence').disabled || !usesThird;
+  $('thirdField').classList.toggle('unused', !usesThird);
+  $('thirdHint').textContent = usesThird ? '已参与' : '未参与';
+  for (const id of ['routeSimple','routeExtended']) {
+    const button = $(id);
+    button.disabled = $('sequence').disabled;
+    button.setAttribute('aria-pressed', String(config.sequence.replace(/\s/g, '') === button.getAttribute('data-route')));
+  }
   $('import').disabled = running || lockedElsewhere || engine?.locked || addingFiles;
   $('newTask').disabled = running || lockedElsewhere || engine?.locked || addingFiles;
   $('export').disabled = lockedElsewhere;
@@ -83,9 +93,9 @@ function render() {
   $('filePicker').disabled = $('chooseFiles').disabled;
   renderFiles();
   $('questionHint').hidden = !running && !paused;
-  $('questionHint').textContent = running ? '正在处理当前问题。需要换题时，请先点“停止”，再点“新问题”。' : '已暂停，可以修改内容并开始新互审。“继续当前步骤”仍会处理原来的问题。';
+  $('questionHint').textContent = running ? '正在处理当前问题。换题前请先暂停，再点“新问题”。' : '已暂停。“继续当前步骤”会接着处理原来的问题；换题请点“新问题”。';
   $('start').disabled = running || !isExtension || lockedElsewhere || engine?.locked || addingFiles;
-  $('start').textContent = r ? '开始新互审 ↗' : '开始互审 ↗';
+  $('start').textContent = r ? '开始新互审' : '开始互审';
   $('pause').disabled = !running || lockedElsewhere;
   $('resume').disabled = !paused || engine?.locked || lockedElsewhere;
   $('takeover').disabled = !r || r.status === 'done' || engine?.locked || lockedElsewhere;
@@ -101,7 +111,7 @@ function render() {
   $('reviewOut').value = reviews.length ? reviews.map((text,i) => `第 ${i + 2} 轮 · ${C.providers[r[r.route[i + 1]]].name}\n${text}`).join('\n\n') : output.review || '';
   $('lastOut').value = output.final || '';
   $('finalOut').value = r?.finalOut || imported?.finalOut || '';
-  $('resultLabel').textContent = r?.status === 'done' ? '已完成' : running ? '处理中' : paused ? '等待接续' : imported?.previous ? '上次结果' : imported ? '已导入' : '等待开始';
+  $('resultLabel').textContent = r?.status === 'done' ? '已完成' : running ? '处理中' : paused ? '等待继续' : imported?.previous ? '上次结果' : imported ? '已导入' : '等待开始';
   const states = {running: '进行中', paused: '已暂停', done: '已完成'};
   $('status').textContent = r ? states[r.status] + ' · ' + (r.status === 'done' ? '最终结果已保存' : `第 ${r.stageIndex + 1}/${r.route.length} 轮 · ${C.providers[r[r.route[r.stageIndex]]].name} · ${C.labels[C.stageAt(r)]}`) : '就绪 · 输入问题后，点击「开始互审」';
   if (r?.pending?.parts?.length > 1 && r.status !== 'done') $('status').textContent += ` · 材料 ${r.pending.partIndex + 1}/${r.pending.parts.length}`;
@@ -113,7 +123,7 @@ function render() {
   $('showThird').hidden = !route.includes('third');
   route.forEach((role,i) => {
     if (i) {const arrow=document.createElement('i');arrow.textContent='→';progress.append(arrow);}
-    const span=document.createElement('span');span.textContent=`${i + 1} ${C.providers[(r || config)[role]]?.name || '待选模型'}`;
+    const span=document.createElement('span');span.textContent=C.providers[(r || config)[role]]?.name || '待选模型';span.setAttribute('data-step',String(i+1));
     span.classList.toggle('active',!!r && i===r.stageIndex && r.status!=='done');
     span.classList.toggle('complete',!!r && (i<r.stageIndex || r.status==='done'));
     progress.append(span);
@@ -133,7 +143,7 @@ function renderFiles() {
     remove.addEventListener('click',async()=>{addingFiles=true;config.attachments=config.attachments.filter(f=>f.id!==file.id);render();try{await store();await pruneFiles();}catch(e){message(e.message,true);}finally{addingFiles=false;render();}});
     item.append(name,remove);list.append(item);
   }
-  $('fileSummary').textContent=addingFiles?'正在保存附件…':config.attachments?.length?`${config.attachments.length} 个附件 · 每个模型会话只上传一次`:'图片、PDF、文档等 · 每个最多 20 MB，共 50 MB';
+  $('fileSummary').textContent=addingFiles?'正在保存附件…':config.attachments?.length?`${config.attachments.length} 个附件 · 每个模型对话只上传一次`:'最多 10 个附件 · 单个 20 MB · 总计 50 MB';
 }
 async function pruneFiles() {
   if(!globalThis.indexedDB)return;
@@ -225,11 +235,11 @@ async function initialize() {
   try {savedLayout=isExtension ? (await chrome.storage.local.get('relayLayout')).relayLayout : JSON.parse(localStorage.getItem('aiRelayLayout'));} catch {}
   layout=RelayLayout.init(savedLayout, value => {
     const write=isExtension ? chrome.storage.local.set({relayLayout:value}) : Promise.resolve(localStorage.setItem('aiRelayLayout',JSON.stringify(value)));
-    write.catch(()=>message('框体大小未能保存。',true));
+    write.catch(()=>message('工作区大小未能保存。',true));
   });
   populateForm(); render();
   $('previewNotice').hidden = isExtension;
-  $('modeBadge').textContent = isExtension ? '本地保存' : '界面预览';
+  $('modeBadge').textContent = isExtension ? '自动保存' : '界面预览';
   bind('chooseFiles',()=> $('filePicker').click());
   $('filePicker').addEventListener('change',async ev=>{await addFiles([...ev.target.files]);ev.target.value='';});
   const drop=$('fileDrop');
@@ -243,6 +253,14 @@ async function initialize() {
     $(id).addEventListener('input', () => {
       readForm(); render();
       clearTimeout(saveTimer); saveTimer = setTimeout(() => store().catch(e => message('保存失败：' + e.message, true)), 300);
+    });
+  }
+  for (const id of ['routeSimple','routeExtended']) {
+    bind(id, async () => {
+      if ($('sequence').disabled) return;
+      clearTimeout(saveTimer);
+      $('sequence').value = $(id).getAttribute('data-route');
+      readForm(); render(); await store();
     });
   }
   bind('start', async () => {

@@ -98,3 +98,40 @@ test('timing summary and per-round table render measured totals without inventin
     assert.match(w.get('timingRows').textContent,/1 · DeepSeek · 初稿01:0600:0101:0000:05/);
   } finally {w.cleanup();}
 });
+
+test('route presets preserve model choices and custom routes without sending',async()=>{
+  const w=await workbench();
+  try {
+    await w.grant();
+    assert.equal(w.get('third').disabled,true);
+    await w.click('routeExtended');
+    assert.equal(w.get('sequence').value,'1-2-3-2-1');
+    assert.equal(w.get('third').disabled,false);
+    assert.equal(w.saved().config.sequence,'1-2-3-2-1');
+    assert.equal(w.get('routeExtended').getAttribute('aria-pressed'),'true');
+    const third=w.get('third').value;
+    await w.click('routeSimple');
+    assert.equal(w.get('third').disabled,true);
+    assert.equal(w.get('third').value,third);
+    w.get('sequence').value='1-2-1-3-1';
+    const RouteEvent=w.get('sequence').ownerDocument.defaultView.Event;
+    w.get('sequence').dispatchEvent(new RouteEvent('input'));
+    assert.equal(w.get('third').disabled,false);
+    assert.equal(w.get('routeSimple').getAttribute('aria-pressed'),'false');
+    assert.equal(w.get('routeExtended').getAttribute('aria-pressed'),'false');
+    assert.equal(w.messages.length,0);
+  } finally {w.cleanup();}
+});
+
+test('route shortcuts cannot change the active task while running',async()=>{
+  const w=await workbench();
+  try {
+    await w.grant();await w.input('路线锁定检查');await w.click('start');
+    assert.equal(w.get('routeSimple').disabled,true);
+    assert.equal(w.get('routeExtended').disabled,true);
+    w.get('routeExtended').click();await turn();
+    assert.equal(vm.runInContext('engine.run.sequence',w.context),'1-2-1');
+    assert.equal(w.get('sequence').value,'1-2-1');
+    assert.equal(w.messages.filter(m=>m.type==='RELAY_SEND').length,1);
+  } finally {w.cleanup();}
+});
