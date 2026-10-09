@@ -30,6 +30,44 @@ async function answer(h,body) {
   await h.e.tick();h.advance(7000);await h.e.tick();
 }
 
+test('reviewer drafts and busy pages identify the affected model before the first send',async()=>{
+  for(const [field,code] of [['inputOccupied','draft-present'],['busy','page-busy']]){
+    const h=harness(),create=h.io.create;
+    h.io.create=async provider=>{const id=await create(provider);if(provider==='chatgpt')h.tabs.get(id)[field]=true;return id;};
+    await h.e.begin(h.config);await h.e.tick();
+    assert.equal(h.e.run.status,'paused');assert.equal(h.e.run.issue.code,code);
+    assert.equal(h.e.run.issue.role,'reviewer');assert.equal(h.sent.length,0);
+  }
+});
+
+test('a finished answer without the round marker explains the wait without advancing or resending',async()=>{
+  const h=harness();await h.e.begin(h.config);await h.e.tick();
+  const p=h.sent[0];h.tabs.get(p.id).answers.push({text:'这是未带结束标记的完整回答'});
+  await h.e.tick();h.advance(21000);await h.e.tick();
+  assert.equal(h.e.run.notice.code,'missing-marker');
+  assert.equal(h.e.run.status,'running');assert.equal(h.e.run.stageIndex,0);assert.equal(h.sent.length,1);
+  h.tabs.get(p.id).answers[0].text+=p.marker;
+  await h.e.tick();assert.equal(h.e.run.notice,null);
+  h.advance(7000);await h.e.tick();assert.equal(h.e.run.stageIndex,1);
+});
+
+test('old answers and an active generation do not produce a missing-marker notice',async()=>{
+  const h=harness();const create=h.io.create;
+  h.io.create=async provider=>{const id=await create(provider);h.tabs.get(id).answers=[{text:'旧回答'}];return id;};
+  await h.e.begin(h.config);await h.e.tick();h.advance(25000);await h.e.tick();
+  assert.ok(!h.e.run.notice);
+  h.tabs.get(h.sent[0].id).answers.push({text:'仍在生成'});h.tabs.get(h.sent[0].id).busy=true;
+  await h.e.tick();h.advance(25000);await h.e.tick();assert.ok(!h.e.run.notice);assert.equal(h.sent.length,1);
+});
+
+test('an expired reviewer login pauses before spending any primary request and targets the affected role',async()=>{
+  const h=harness();const create=h.io.create;
+  h.io.create=async provider=>{const id=await create(provider);if(provider==='chatgpt')h.tabs.get(id).loginRequired=true;return id;};
+  await h.e.begin(h.config);await h.e.tick();
+  assert.equal(h.e.run.status,'paused');assert.equal(h.e.run.issue.code,'login-required');
+  assert.equal(h.e.run.issue.role,'reviewer');assert.equal(h.sent.length,0);
+});
+
 test('1-2-1-3-1 sends source files exactly once to each distinct conversation',async()=>{
   const h=withFiles(harness());h.config.third='kimi';h.config.sequence='1-2-1-3-1';
   await h.e.begin(h.config);

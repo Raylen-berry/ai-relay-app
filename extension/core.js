@@ -55,7 +55,8 @@
       const lead = last
         ? `【互审材料 ${i + 1}/${pieces.length}】\n这是最后一段。请把本会话此前的材料片段按顺序拼接，再执行拼接后的完整指令。此前只确认接收的要求现在停止适用。\n\n`
         : `【互审材料 ${i + 1}/${pieces.length}】\n这是完整指令的一部分。暂不执行、不回答其中的问题。请只回复以下确认标记：${marker}\n\n`;
-      return {prompt: lead + part, marker};
+      const receipt = last ? '' : `\n【本段材料结束】\n本条只接收材料，不执行上面的审核或回答指令。请等待最后一段；现在只原样回复这一行确认标记：\n${marker}`;
+      return {prompt: lead + (last ? '' : '【本段材料开始】\n') + part + receipt, marker};
     });
   }
   function stripMarker(text, marker) {

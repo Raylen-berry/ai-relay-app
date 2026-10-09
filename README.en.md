@@ -8,11 +8,11 @@ AI Relay connects the steps you would otherwise do by hand in model web apps: as
 
 It works with the web versions of DeepSeek, ChatGPT, and Kimi, using the accounts you have signed into in your browser. You do not need an API key, Node, or Python for everyday use.
 
-Current version: **0.5.1 beta** for Windows, with Chrome or Edge.
+Current version: **0.5.2 beta** for Windows, with Chrome or Edge.
 
 ## Install
 
-1. [Download the Windows package](https://github.com/Raylen-berry/ai-relay-app/raw/refs/heads/main/AI-Relay-0.5.1-Windows.zip) and extract the whole archive.
+1. [Download the Windows package](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.5.2/AI-Relay-0.5.2-Windows.zip) and extract the whole archive.
 2. Run `安装到本机.cmd`. It installs to `%LOCALAPPDATA%\Programs\AI-Relay` by default and creates desktop and Start menu shortcuts.
 3. Open `chrome://extensions/` or `edge://extensions/` in the browser you want to use. Turn on **Developer mode**, choose **Load unpacked**, and select the **extension folder inside the installation directory**.
 4. Sign into the model websites in that browser, then open the desktop shortcut named “AI 互审”.
@@ -21,7 +21,7 @@ The install script prefers Edge. To choose Chrome, open `AI互审启动助手.ex
 
 Loading the extension is a manual step on first use. Keep the installation directory: the browser reads the extension from there. The package includes an [installation guide](开始使用.html) and [instructions for another computer](换机安装.md), both in Chinese.
 
-The archive contains no accounts, chat history, or development dependencies. The adjacent `.sha256` file lets you check its integrity.
+Current and older packages are available in [Releases](https://github.com/Raylen-berry/ai-relay-app/releases). The repository root contains source code and documentation. The archive contains no accounts, chat history, or development dependencies. The adjacent `.sha256` file lets you check its integrity.
 
 ## Use it
 
@@ -36,6 +36,8 @@ A route can have 3–9 rounds and must begin and end with model 1. The third mod
 
 Keep the workbench and task pages open while a task runs. Once the final answer is saved on the right, the task pages close automatically. Expand “每轮回答与手动处理” (**Round answers and manual handling**) to see the draft, reviews, and full revision. Opening the desktop shortcut again brings you back to the existing workbench.
 
+Results open in “阅读” (**Reading**) view, with headings, tables, lists, and code blocks. Choose “原文” (**Raw text**) to see the collected Markdown. “复制结果” (**Copy result**) copies that text; code blocks have their own copy button.
+
 Relay uses whichever model and mode each website currently has selected. Start with a short question when trying a new setup.
 
 ### Images and files
@@ -46,7 +48,7 @@ Selected files are stored locally until you start the task. Each participating m
 
 ### If a task gets stuck
 
-A website update, expired login, or file processing error can interrupt a task. Read the workbench message, then choose the appropriate action:
+The workbench distinguishes login, page connection, attachment, and end-marker problems, and suggests what to do next. “查看当前网页” (**Open task page**) opens the model page that needs attention. You can then:
 
 - Fix the task page and click “继续当前步骤” (**Continue current step**).
 - Click “手动处理本轮” (**Handle this round manually**), send the message on the model website, then return and click “已手动发送，继续收取” (**Sent manually; collect the answer**).
@@ -74,7 +76,7 @@ The extension requests local storage, clipboard access, and access to the DeepSe
 
 Answer collection checks the round's end marker, generation state, and a period of stable output. Research and agent workflows, and the Kimi desktop app, are outside the current scope.
 
-Local tests cover routing, pause and recovery, duplicate-send protection, and file transfer. A text-only DeepSeek → ChatGPT → DeepSeek task has also completed on this computer in Chrome. Other accounts, modes, models, and attachment workflows need their own checks. See the [validation log](验证记录.md) and [change log](更新记录.md), both in Chinese.
+Local tests cover routing, pause and recovery, duplicate-send protection, and file transfer. On this computer in Chrome, both a three-round text-only task and a five-round `1-2-1-2-1` task with an image and a text file completed using DeepSeek and ChatGPT. Later rounds reused attachments in the original conversations, and the final checks were correct. Kimi was not rechecked in this round; other accounts and modes still need their own checks. See the [validation log](验证记录.md) and [change log](更新记录.md), both in Chinese.
 
 ## Development
 
@@ -93,14 +95,15 @@ npm run build
 npm run package
 ```
 
-The launcher build uses the system .NET Framework C# compiler. Development dependencies are excluded from the Windows package.
+The launcher build uses the system .NET Framework C# compiler. Archives and checksums are written to `dist/`. The extension bundles the files it needs locally and does not load remote scripts.
 
 `node preview-server.cjs` serves the interface preview at `http://127.0.0.1:8766`. `node tools-browser-check.cjs` serves the browser storage and file transfer checks at `http://127.0.0.1:8767`. Neither sends questions to models.
 
 | Files | Purpose |
 | --- | --- |
 | `extension/app.*`, `app-polish.css` | Workbench interface and local records |
-| `extension/engine.js` | Multi-round task flow |
+| `extension/engine.js`, `issues.js` | Multi-round task flow and stall guidance |
+| `extension/markdown-source.js`, `markdown.js` | Answer formatting and result reading view |
 | `extension/core.js` | Prompts, result parsing, and data import |
 | `extension/adapters.js`, `content.js` | Model page detection and interaction |
 | `extension/files.js`, `upload.js` | Attachment storage and upload |
@@ -110,6 +113,8 @@ The launcher build uses the system .NET Framework C# compiler. Development depen
 Keep the `key` in `manifest.json`. Changing it changes the extension ID and breaks the connection to existing shortcuts and local data. After changing page adapters, reload the extension and refresh its model task pages.
 
 ## Recent changes
+
+**0.5.2**: Added guidance for stalled tasks and a reading view. Preserved tables, headings, and code during answer collection, while removing extra layout whitespace. Fixed confirmation when ChatGPT renames uploaded files and strengthened chunk receipt instructions. Moved installer packages to Releases.
 
 **0.5.1**: Updated model menus, route shortcuts, progress indicators, and interface text. Fixed answer collection for ChatGPT's new page layout. Added Chinese and English READMEs with links to switch between them.
 

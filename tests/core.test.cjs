@@ -50,9 +50,16 @@ test('long prompt is divided into bounded sequential text segments with unique r
   assert.ok(parts.length>2);
   assert.ok(parts.every(p=>Array.from(p.prompt).length<2800));
   const chars=Array.from(content);
-  assert.ok(parts.every((p,i)=>p.prompt.endsWith(chars.slice(i*2500,(i+1)*2500).join(''))));
+  assert.ok(parts.every((p,i)=>p.prompt.includes(chars.slice(i*2500,(i+1)*2500).join(''))));
+  assert.ok(parts.slice(0,-1).every(p=>p.prompt.endsWith(p.marker)));
   assert.equal(new Set(parts.slice(0,-1).map(p=>p.marker)).size,parts.length-1);
   assert.equal(parts.at(-1).marker,null);
   assert.ok(parts.at(-1).prompt.endsWith('【接力结束_final】'));
   assert.deepEqual(C.splitPrompt('短问题','run'),[{prompt:'短问题',marker:null}]);
+});
+
+test('partial material instructions are followed by a receipt-only reminder',()=>{
+  const parts=C.splitPrompt('立即审核：'.repeat(900),'receipt-test',2500);
+  assert.ok(parts.slice(0,-1).every(p=>p.prompt.includes('【本段材料结束】\n本条只接收材料，不执行上面的审核或回答指令。')));
+  assert.ok(parts.at(-1).prompt.includes('此前只确认接收的要求现在停止适用'));
 });

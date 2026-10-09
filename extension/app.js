@@ -16,6 +16,8 @@ let saveChain = Promise.resolve();
 let saveTimer;
 let transient = null;
 let layout;
+let outputMode = 'preview';
+let renderedResult = null;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 function readForm() {
   config = {q: $('question').value, attachments:config.attachments || [], primary: $('primary').value, reviewer: $('reviewer').value,
@@ -31,7 +33,7 @@ function populateForm() {
 }
 function store() {
   if (isExtension && lockedElsewhere) return Promise.resolve();
-  const payload = structuredClone({config, run: engine?.run, imported});
+  const payload = structuredClone({config, run: engine?.run, imported, outputMode});
   saveChain = saveChain.catch(() => {}).then(async () => {
     if (isExtension) await chrome.storage.local.set({relay: payload});
     else localStorage.setItem('aiRelayPreview', JSON.stringify(payload));
@@ -111,12 +113,27 @@ function render() {
   $('reviewOut').value = reviews.length ? reviews.map((text,i) => `第 ${i + 2} 轮 · ${C.providers[r[r.route[i + 1]]].name}\n${text}`).join('\n\n') : output.review || '';
   $('lastOut').value = output.final || '';
   $('finalOut').value = r?.finalOut || imported?.finalOut || '';
+  renderResult();
   $('resultLabel').textContent = r?.status === 'done' ? '已完成' : running ? '处理中' : paused ? '等待继续' : imported?.previous ? '上次结果' : imported ? '已导入' : '等待开始';
   const states = {running: '进行中', paused: '已暂停', done: '已完成'};
   $('status').textContent = r ? states[r.status] + ' · ' + (r.status === 'done' ? '最终结果已保存' : `第 ${r.stageIndex + 1}/${r.route.length} 轮 · ${C.providers[r[r.route[r.stageIndex]]].name} · ${C.labels[C.stageAt(r)]}`) : '就绪 · 输入问题后，点击「开始互审」';
   if (r?.pending?.parts?.length > 1 && r.status !== 'done') $('status').textContent += ` · 材料 ${r.pending.partIndex + 1}/${r.pending.parts.length}`;
   $('error').textContent = r?.error || '';
   $('error').hidden = !r?.error;
+  const issue = r?.issue || r?.notice || (r?.error ? RelayIssues.classify(r.error) : null);
+  $('issueBox').hidden = !issue;
+  if (issue) {
+    $('error').hidden = true;
+    $('issueBox').setAttribute('data-level', issue.level);
+    $('issueTitle').textContent = issue.title;
+    $('issueHelp').textContent = issue.help;
+    $('issueDetail').textContent = issue.detail || '';
+    $('issueDetails').hidden = !issue.detail || issue.detail === issue.help;
+    $('issuePage').hidden = !issue.actions.includes('page');
+    $('issueRetry').hidden = !issue.actions.includes('retry') || !paused;
+    $('issueManual').hidden = !issue.actions.includes('manual');
+    for (const id of ['issuePage','issueRetry','issueManual']) $(id).disabled = lockedElsewhere || engine?.locked;
+  }
   $('logs').textContent = (r?.logs || []).map(x => new Date(x.at).toLocaleTimeString() + '  ' + x.text).join('\n');
   const progress = $('steps'); progress.replaceChildren();
   const route = r?.route || (() => {try {return C.routeFor(config);} catch {return ['primary','reviewer','primary'];}})();
@@ -132,6 +149,21 @@ function render() {
     $('status').textContent = transient.text;
     if (transient.error) {$('error').textContent = transient.text; $('error').hidden = false;}
   }
+}
+function renderResult() {
+  const text = $('finalOut').value;
+  let reading = !!text && outputMode === 'preview';
+  $('viewPreview').disabled = !text;
+  $('viewRaw').disabled = !text;
+  $('resultPreview').style.height = (layout?.get().outputHeight || 300) + 'px';
+  if (reading && renderedResult !== text) {
+    try {RelayMarkdown.render($('resultPreview'), text);renderedResult = text;}
+    catch {reading = false;}
+  }
+  $('finalOut').hidden = reading;
+  $('resultPreview').hidden = !reading;
+  $('viewPreview').setAttribute('aria-pressed', String(reading));
+  $('viewRaw').setAttribute('aria-pressed', String(!reading));
 }
 function renderFiles() {
   const disabled=$('chooseFiles').disabled;
@@ -184,19 +216,19 @@ const io = {
     await checkedTab(id, provider);
     // Newly created pages need time to attach their declarative content script.
     for (let i = 0; i < 24; i++) {
-      if (engine.run?.status !== 'running' && i > 0) throw new Error('等待连接已停止。');
+      if (engine.run?.status !== 'running' && i > 0) throw RelayIssues.failure('page-unreachable', '等待连接已停止。');
       try {
         const data = await chrome.tabs.sendMessage(id, {type: 'RELAY_SNAPSHOT'});
         if (data?.ok && data.protocol !== 5) {
           const error = new Error(C.providers[provider].name + ' 页面仍在使用旧版连接脚本。请刷新这个模型任务页面，再点继续；只重新加载扩展还不够。');
           error.relayUpdate = true; throw error;
         }
-        if (data?.ok && data.input) return data;
+        if (data?.ok && (data.input || data.loginRequired)) return data;
         if (data?.ok && i === 23) return data;
       } catch (e) { if (e.relayUpdate) throw e; /* Wait for page load without resending. */ }
       await sleep(500);
     }
-    throw new Error(C.providers[provider].name + ' 页面未连接。请检查网络、登录，并刷新任务网页后继续。');
+    throw RelayIssues.failure('page-unreachable', C.providers[provider].name + ' 页面未连接。请检查网络、登录，并刷新任务网页后继续。');
   },
   send: (id, p) => chrome.tabs.sendMessage(id, {type: 'RELAY_SEND', ...p}),
   upload: (id, files, batchId, runId, recovery, active) => RelayFiles.upload(msg=>chrome.tabs.sendMessage(id,msg),files,batchId,runId,recovery,active),
@@ -226,6 +258,7 @@ async function loadSaved() {
   config = saved?.config ? C.importData({config: saved.config}).config : defaultConfig();
   config.attachments=Array.isArray(saved?.config?.attachments)?saved.config.attachments:[];
   imported = saved?.imported || null;
+  outputMode = saved?.outputMode === 'raw' ? 'raw' : 'preview';
   engine.restore(saved?.run || null);
 }
 async function initialize() {
@@ -297,6 +330,20 @@ async function initialize() {
   bind('takeover', async () => {await engine.takeover(); render(); message('已打开本轮网页。可复制待发内容手动发送，或直接粘贴本轮完整回答跳到下一轮。');});
   bind('manualSent', async () => {await engine.markManualSent(); await engine.resume(); await engine.tick(); render();});
   bind('copyFinal', () => copy($('finalOut').value));
+  for (const [id, mode] of [['viewPreview','preview'],['viewRaw','raw']]) bind(id, async () => {outputMode=mode;renderResult();await store();});
+  bind('issuePage', async () => {
+    const run=engine.run;if(!run)return;
+    const issue=run.issue || run.notice;
+    const tab=run.tabs[issue?.role || run.route[run.stageIndex]];
+    if(tab)await io.activate(tab.id);
+  });
+  bind('issueRetry', async () => {await engine.resume();await engine.tick();render();});
+  bind('issueManual', async () => {
+    if(engine.active())await engine.pause('已暂停，请补入当前轮的完整回答。');
+    const details=$('manual').closest('details');details.open=true;
+    $('manual').focus();$('manual').scrollIntoView?.({block:'center',behavior:'smooth'});
+    render();
+  });
   bind('copyPrompt', async () => {
     const r = engine.run; if (!r) return;
     const stage = C.stageAt(r);

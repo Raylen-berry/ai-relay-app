@@ -2,6 +2,7 @@
   'use strict';
   const C = typeof module !== 'undefined' ? require('./core.js') : root.RelayCore;
   const E = typeof module !== 'undefined' ? require('./editor.js') : root.RelayEditor;
+  const I = typeof module !== 'undefined' ? require('./issues.js') : root.RelayIssues;
   const pieceAt = pending => pending.parts?.[pending.partIndex || 0] || {prompt: pending.prompt, marker: null};
   const samePrompt = (draft, pending) => E.same(draft, pieceAt(pending).prompt);
   const emptyTime = () => ({send:0, wait:0, paused:0});
@@ -15,6 +16,7 @@
     constructor(io, changed, now = Date.now, uid = () => crypto.randomUUID()) {
       this.io = io; this.changed = changed; this.now = now; this.uid = uid;
       this.run = null; this.locked = false; this.observation = null;
+      this.waitingCandidate = null;
     }
     clock() {
       const r = this.run, t = r?.timing;
@@ -57,6 +59,7 @@
         if (this.run.timing) this.run.timing.mode = 'paused';
         this.run.status = 'paused';
         this.run.error = '窗口曾关闭或刷新。点击继续后先检查当前步骤，不会重复发送已尝试发送的消息。';
+        this.run.issue = I.describe('interrupted', this.run.error, 'info');
       }
       if (this.run && !this.run.timing && this.run.status !== 'done') {
         this.run.timing = {startedAt:this.now(), checkpoint:this.now(), mode:'paused', index:this.run.stageIndex,
@@ -64,10 +67,13 @@
       }
       this.clock();
       this.observation = null;
+      this.waitingCandidate = null;
     }
-    async pause(reason = '已停止自动接力。网页上已发出的生成可能仍在继续；继续时会先读取结果。') {
+    async pause(reason = '已暂停自动接力。已发出的模型请求可能仍在生成；继续时会先读取结果。', issue) {
       if (!this.run || this.run.status === 'done') return;
       this.run.status = 'paused'; this.run.error = reason; this.log(reason);
+      this.run.issue = issue || I.describe('manual-pause', reason, 'info');
+      this.run.notice = null;
       await this.save();
       await Promise.allSettled(Object.values(this.run.tabs).map(t => this.io.cancel(t.id, this.run.id)));
     }
@@ -75,11 +81,12 @@
       if (!this.run || this.run.status !== 'paused' || this.locked) return;
       await Promise.allSettled(Object.values(this.run.tabs).map(t => this.io.resume(t.id, this.run.id)));
       this.run.status = 'running'; this.run.error = '';
+      this.run.issue = null; this.run.notice = null; this.waitingCandidate = null;
       if (this.run.pending) this.run.pending.started = this.now();
       this.observation = null; this.log('继续处理当前步骤。'); await this.save();
     }
     active() { return this.run?.status === 'running'; }
-    async prepare() {
+    async prepare(before) {
       if (this.run.pending) return this.run.pending;
       const stage = C.stageAt(this.run);
       const role = this.run.route[this.run.stageIndex];
@@ -93,6 +100,10 @@
       const prompt = C.promptFor(this.run, stage, marker);
       this.run.pending = {taskId, marker, phase:'prepared', started:this.now(), prompt,
         parts:C.splitPrompt(prompt, taskId), partIndex:0};
+      if (before) {
+        this.run.pending.answerCountBefore = before.answers.length;
+        this.run.pending.answerTextBefore = before.answers.at(-1)?.text || '';
+      }
       await this.save();
       return this.run.pending;
     }
@@ -125,6 +136,7 @@
       this.run.turns.push(text);
       this.log(C.labels[stage] + '完成，已保存。');
       this.run.stageIndex++; this.run.pending = null; this.observation = null;
+      this.run.issue = null; this.run.notice = null; this.waitingCandidate = null;
       if (stage === 'final') {
         this.run.finalOut = C.extractFinal(text); this.run.status = 'done';
         this.log('全部完成，可以复制右侧最终结果。');
@@ -165,14 +177,16 @@
           for (const r of [...new Set(this.run.route)]) {
             if (!this.active()) return;
             const s = await this.io.snapshot(this.run.tabs[r].id, this.run[r]);
-            if (!s.input) throw new Error(C.providers[this.run[r]].name + ' 未找到输入框，请在任务页面完成登录后点击继续。');
-            if (s.busy || s.inputOccupied) throw new Error(C.providers[this.run[r]].name + ' 页面有未完成的生成或输入，请先检查。');
+            if (s.loginRequired) throw I.failure('login-required', C.providers[this.run[r]].name + ' 需要登录，请在任务页面完成登录后继续。', {role:r});
+            if (!s.input) throw I.failure('input-missing', C.providers[this.run[r]].name + ' 未找到输入框，请在任务页面检查登录或页面适配后点击继续。', {role:r});
+            if (s.busy || s.inputOccupied) throw I.failure(s.busy ? 'page-busy' : 'draft-present', C.providers[this.run[r]].name + ' 页面有未完成的生成或输入，请先检查。', {role:r});
           }
         }
         if (!this.active()) return;
         let snap = await this.io.snapshot(tab.id, this.run[role]);
+        if (snap.loginRequired) throw I.failure('login-required', C.providers[this.run[role]].name + ' 登录已失效，请重新登录后继续当前步骤。');
         if (!C.allowedURL(this.run[role], snap.url)) throw new Error('任务页面已离开所选模型网站，请重新打开或手动补入结果。');
-        if (!this.run.pending) await this.prepare();
+        if (!this.run.pending) await this.prepare(snap);
         const p = this.run.pending;
         const piece = pieceAt(p);
         const currentMarker = piece.marker || p.marker;
@@ -228,6 +242,8 @@
           if (!this.active()) return;
           // Persist before sending so a lost response/reload cannot trigger a duplicate.
           p.phase = 'dispatching'; p.started = this.now();
+          p.answerCountBefore = snap.answers.length;
+          p.answerTextBefore = snap.answers.at(-1)?.text || '';
           this.log('正在向 ' + C.providers[this.run[role]].name + ' 发送：' + C.labels[stage]);
           await this.save();
           if (!this.active()) {p.phase = 'prepared'; await this.save(); return;}
@@ -249,22 +265,33 @@
           return;
         }
         if (!this.active()) return;
+        const latest = snap.answers.at(-1)?.text || '';
+        const fresh = Number.isInteger(p.answerCountBefore) &&
+          (snap.answers.length > p.answerCountBefore || latest !== p.answerTextBefore);
+        if (fresh && latest && !latest.includes(currentMarker) && !snap.busy) {
+          if (this.waitingCandidate?.text !== latest) this.waitingCandidate = {text:latest, since:this.now()};
+          if (this.now() - this.waitingCandidate.since >= 20000) this.run.notice = I.describe('missing-marker', '', 'notice');
+        } else {
+          this.waitingCandidate = null; this.run.notice = null;
+        }
         this.observation = C.observe(this.observation, snap, currentMarker, this.now(), waitingPart ? 1000 : 6000);
         if (this.observation.done) {
           if(tab.filesState)tab.filesState.phase='sent';
           if (waitingPart) {
             p.partIndex++; p.phase = 'prepared'; p.started = this.now(); p.draftRetained = false;
             this.observation = null;
+            this.waitingCandidate = null; this.run.notice = null;
             this.log(`材料第 ${p.partIndex}/${p.parts.length} 段已确认。`);
             await this.save(); return;
           }
           tab.url = snap.url; tab.previousMarker = p.marker;
           await this.complete(C.stripMarker(this.observation.text, p.marker));
         } else if (this.now() - p.started > this.run.timeout * 60000) {
-          throw new Error('等待超时，或网页没有输出结束标记。请检查网页；可以继续等待，也可以粘贴完整回答后接着运行。');
+          if (this.run.notice?.code === 'missing-marker') throw I.failure('missing-marker', '等待超时，本轮回答仍缺少结束标记。确认网页已回答完整后，可手动补入回答继续。');
+          throw I.failure('answer-timeout', '等待回答超时。请查看网页；可以继续等待，也可以手动补入完整回答。');
         } else await this.save();
       } catch (e) {
-        if (this.run && this.active()) await this.pause(e.message);
+        if (this.run && this.active()) await this.pause(e.message, I.classify(e));
         else if (this.run) await this.save();
       } finally { this.locked = false; }
     }

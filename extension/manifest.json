@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "AI 互审 · Relay",
   "description": "使用已登录的模型网页，自动完成初稿、交叉审核和回传定稿。",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "minimum_chrome_version": "114",
   "permissions": [
     "storage",
@@ -43,6 +43,7 @@
       "js": [
         "adapters.js",
         "editor.js",
+        "markdown-source.js",
         "upload.js",
         "content.js"
       ],

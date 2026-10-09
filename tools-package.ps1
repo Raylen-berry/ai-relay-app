@@ -11,7 +11,7 @@ New-Item -ItemType Directory -Path (Join-Path $relayStage 'assets') | Out-Null
 foreach ($relayAsset in @('relay-128.png',('relay-' + $relayVersion + '.ico'))) {
     Copy-Item -LiteralPath (Join-Path $relayRoot ('assets\' + $relayAsset)) -Destination (Join-Path $relayStage 'assets')
 }
-$relayArchive = Join-Path $relayRoot ('AI-Relay-' + $relayVersion + '-Windows.zip')
+$relayArchive = Join-Path $relayRoot ('dist\AI-Relay-' + $relayVersion + '-Windows.zip')
 Compress-Archive -Path (Join-Path $relayStage '*') -DestinationPath $relayArchive -Force
 $relayHasher = [Security.Cryptography.SHA256]::Create()
 $relayStream = [IO.File]::OpenRead($relayArchive)

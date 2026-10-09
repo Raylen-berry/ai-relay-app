@@ -16,6 +16,7 @@
     },
     'chatgpt.com': {
       name: 'ChatGPT',
+      login: ['button[data-testid="login-button"]', 'a[href="/auth/login"]'],
       composer: 'form',
       attachment: '[class~="group/composer-attachment"], [class~="group/file-tile"], [data-testid="file-thumbnail"], [data-testid="attachment"]',
       attachmentName: '[data-file-name], .composer-attachment-surface[aria-label]',

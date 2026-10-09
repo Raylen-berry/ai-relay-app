@@ -74,15 +74,16 @@
     const files = attachments(box);
     return {
       protocol: 5, name: adapter.name, url: location.href, input: !!box,
+      loginRequired: select(adapter.login || []).length > 0 || /\/(?:login|signin|auth)(?:\/|$)/i.test(location.pathname || ''),
       inputOccupied: !!inputText(box) || !!files.count, draft: inputText(box), attachments:files,
       sendFound: !!findSendButton(box), busy: busy(),
       userMessages: select(['[data-message-author-role="user"]'], false).map(e => ({text: inputText(e)})),
       answers: entries.map(e => {
         if (adapter.name === 'Kimi') {
           const parts = [...e.querySelectorAll('.markdown')].filter(n => !n.closest('.thinking-container'));
-          return {text: parts.map(n => n.innerText.trim()).join('\n\n')};
+          return {text: parts.map(n => RelayMarkdownSource.read(n)).join('\n\n')};
         }
-        return {text: e.innerText?.trim() || ''};
+        return {text: RelayMarkdownSource.read(e)};
       }).filter(a => a.text)
     };
   }

@@ -4,10 +4,16 @@
     const batches=new Map();
     const fail=error=>({ok:false,error});
     const normalized=s=>String(s||'').normalize('NFC').trim().replace(/\.[^.]+$/,ext=>ext.toLowerCase());
-    function matches(files, current) {
+    function renamedBySite(name, actual) {
+      if(adapter.name !== 'ChatGPT')return false;
+      const dot=name.lastIndexOf('.'),base=dot<0?name:name.slice(0,dot),ext=dot<0?'':name.slice(dot);
+      const escape=text=>text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      return new RegExp('^'+escape(base)+' ?\\([1-9]\\d*\\)'+escape(ext)+'$').test(actual);
+    }
+    function matches(files, current, allowRenamed = false) {
       if(current.count!==files.length)return false;
       const names=[...(current.names||[])].map(normalized);
-      return files.every(f=>{const at=names.indexOf(normalized(f.name));if(at<0)return false;names.splice(at,1);return true;});
+      return files.every(f=>{const expected=normalized(f.name);const at=names.findIndex(name=>name===expected || (allowRenamed && renamedBySite(expected,name)));if(at<0)return false;names.splice(at,1);return true;});
     }
     const signature=files=>JSON.stringify(files.map(f=>[f.id,f.name,f.size,f.type]));
     const accepts=(element,file)=>{
@@ -31,7 +37,7 @@
         const current=attachments();
         let batch=batches.get(msg.batchId);
         if(batch && batch.key!==signature(files))return fail('附件内容发生变化，请开始新任务。');
-        if(matches(files,current)) {
+        if(!current.pending && matches(files,current,batch?.state==='attached' || batch?.state==='attaching')) {
           batches.set(msg.batchId,{runId:msg.runId,key:signature(files),files,state:'attached'});
           return {ok:true,signature:current.signature};
         }
@@ -54,7 +60,7 @@
         batch.bytes[i].push(bytes);batch.received[i]+=bytes.length;return {ok:true};
       }
       if(msg.type==='RELAY_FILES_COMMIT') {
-        if(batch.state==='attached' && matches(batch.files,attachments()))return {ok:true,signature:attachments().signature};
+        if(batch.state==='attached' && matches(batch.files,attachments(),true))return {ok:true,signature:attachments().signature};
         if(batch.state!=='buffering'||batch.files.some((f,i)=>batch.received[i]!==f.size))return fail('附件未传输完整，未上传。');
         const target=fileInput(batch.files);
         if(!target||busy()||attachments().count||RelayEditor.normalize(RelayEditor.read(input())))return fail('上传前网页内容发生变化，已停止。');
@@ -63,11 +69,16 @@
         batch.state='attaching';delete batch.bytes;delete batch.received;
         target.files=data.files;
         target.dispatchEvent(new Event('change',{bubbles:true}));
+        let readySignature = null, stable = 0;
         for(let i=0;i<240;i++) {
           if(cancelled.has(msg.runId))return fail('已停止；网页可能保留附件。');
           const current=attachments();
           if(current.failed)return fail('附件上传失败，请在模型页面检查。');
-          if(matches(batch.files,current)) {batch.state='attached';return {ok:true,signature:current.signature};}
+          if(!current.pending && matches(batch.files,current,true)) {
+            stable = readySignature === current.signature ? stable + 1 : 0;
+            readySignature = current.signature;
+            if(stable>=8){batch.state='attached';return {ok:true,signature:current.signature};}
+          } else {readySignature = null;stable = 0;}
           await sleep(250);
         }
         return fail('网页没有确认全部附件。请检查或手动补齐附件后继续。');

@@ -24,7 +24,7 @@ function page(host, html) {
     getComputedStyle:e=>({visibility:e.style.visibility||'visible',opacity:e.style.opacity||'1',display:e.style.display||'block'}),setTimeout:fn=>setImmediate(fn),console,
     chrome:{runtime:{id:'relay',onMessage:{addListener:fn=>receive=fn}}}
   });
-  for(const name of ['adapters.js','editor.js','upload.js','content.js']) vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../extension',name),'utf8'),context);
+  for(const name of ['adapters.js','editor.js','markdown-source.js','upload.js','content.js']) vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../extension',name),'utf8'),context);
   const sendButton=window.document.querySelector('[data-send]');
   sendButton?.addEventListener('click',()=>{clicks++;});
   return {document:window.document,window,clicks:()=>clicks,message:msg=>new Promise(resolve=>receive(msg,{id:'relay'},resolve))};
@@ -311,6 +311,34 @@ test('recovery without matching attachments does not inject or silently claim an
   const p=uploadPage('chatgpt.com');
   const result=await p.message({type:'RELAY_FILES_BEGIN',files:chosenFiles,runId:'run',batchId:'lost',recovery:true});
   assert.equal(result.ok,false);assert.match(result.error,/不会重复上传/);assert.equal(p.uploads(),0);
+});
+
+test('ChatGPT server renaming during this upload is confirmed after parsing and reused without another upload',async()=>{
+  const p=uploadPage('chatgpt.com');
+  p.picker.addEventListener('change',()=>{
+    p.root.firstElementChild.setAttribute('aria-busy','true');
+    setImmediate(()=>{
+      p.root.replaceChildren();
+      for(const file of chosenFiles){const temp=p.document.createElement('div');temp.innerHTML=liveCard('chatgpt.com',{...file,name:file.name.replace(/(\.[^.]+)$/,'(1)$1')});p.root.append(temp.firstElementChild);}
+    });
+  });
+  const prepared=await prepareChosen(p);
+  assert.equal(prepared.ok,true,prepared.error);assert.match(prepared.signature,/test\(1\)\.png/);
+  const again=await p.message({type:'RELAY_FILES_BEGIN',batchId:'batch',runId:'run',files:chosenFiles,recovery:true});
+  assert.equal(again.ok,true,again.error);assert.equal(again.signature,prepared.signature);assert.equal(p.uploads(),1);
+  const sent=await p.message({type:'RELAY_SEND',taskId:'renamed',runId:'run',prompt:'核对原附件【接力结束_renamed】',userFiles:true,attachmentSignature:prepared.signature});
+  assert.equal(sent.ok,true,sent.error);assert.equal(p.clicks(),1);
+});
+
+test('renamed or unrelated files without a known upload batch do not bypass recovery checks',async()=>{
+  const p=uploadPage('chatgpt.com');
+  for(const file of chosenFiles){const temp=p.document.createElement('div');temp.innerHTML=liveCard('chatgpt.com',{...file,name:file.name.replace(/(\.[^.]+)$/,'(2)$1')});p.root.append(temp.firstElementChild);}
+  const unknown=await p.message({type:'RELAY_FILES_BEGIN',batchId:'unknown',runId:'run',files:chosenFiles,recovery:true});
+  assert.equal(unknown.ok,false);assert.equal(p.uploads(),0);
+  const q=uploadPage('chatgpt.com');await prepareChosen(q);
+  q.root.firstElementChild.setAttribute('aria-label','another.png');q.root.firstElementChild.querySelector('img').setAttribute('alt','another.png');
+  const changed=await q.message({type:'RELAY_FILES_BEGIN',batchId:'batch',runId:'run',files:chosenFiles,recovery:true});
+  assert.equal(changed.ok,false);assert.equal(q.uploads(),1);
 });
 
 test('selected files plus prompt converted to TXT survive a parsing pause without repasting',async()=>{
