@@ -1,0 +1,48 @@
+<section class="workflow-hub" aria-label="工作流程">
+  <div class="workflow-heading"><div><h2>今天要做什么？</h2><p>先整理材料，再让模型分析和复核。</p></div><span class="workflow-label">工作流程</span></div>
+  <div class="workflow-tabs" role="tablist" aria-label="选择工作流程">
+    <button id="flowGeneral" role="tab" aria-selected="true" aria-controls="generalFlow" data-flow="general">通用互审</button>
+    <button id="flowAnalysis" role="tab" aria-selected="false" aria-controls="analysisFlow" data-flow="analysis">数据分析</button>
+    <button id="flowResearch" role="tab" aria-selected="false" aria-controls="researchFlow" data-flow="research">调研报告</button>
+    <button id="flowKnowledge" role="tab" aria-selected="false" aria-controls="knowledgeFlow" data-flow="knowledge">资料问答</button>
+  </div>
+  <div id="generalFlow" role="tabpanel" aria-labelledby="flowGeneral" class="flow-general">直接在下方输入问题，也可以添加附件。</div>
+  <section id="analysisFlow" role="tabpanel" aria-labelledby="flowAnalysis" hidden>
+    <div class="flow-intro"><h3>把数据看清楚，再讨论结论</h3><p>统计值在本机计算。准备模型分析时，会发送统计摘要和最多 15 行样例。</p></div>
+    <div class="flow-actions"><button id="analysisChoose" class="secondary">导入表格</button><input id="analysisFile" type="file" accept=".csv,.tsv,.xlsx" hidden><button id="analysisDemo" class="text-btn">试用示例数据</button><label class="flow-inline-label">工作表 <select id="analysisSheet" aria-label="分析工作表"></select></label><span id="analysisFileName" class="tiny">CSV / TSV / XLSX · 最多 5000 行</span></div>
+    <div id="analysisWarnings" class="flow-note" hidden></div>
+    <div id="analysisEmpty" class="flow-empty">选择一份表格，或用示例数据试试看。</div>
+    <div id="analysisBody" hidden>
+      <div id="analysisStats" class="flow-stats"></div>
+      <details class="flow-details"><summary>查看数据与整理选项</summary><div class="flow-actions"><label><input id="cleanTrim" type="checkbox">去掉首尾空格</label><label><input id="cleanEmpty" type="checkbox">去掉全空行</label><label><input id="cleanDuplicates" type="checkbox">去掉重复行</label><button id="analysisClean" class="secondary">应用整理</button><button id="analysisReset" class="text-btn">恢复导入数据</button></div><p id="analysisPreviewHint" class="tiny"></p><div id="analysisTable" class="flow-table"></div></details>
+      <div class="flow-chart-card"><div class="flow-chart-heading"><h4>分组图表</h4><div class="flow-chart-controls"><label>分组 <select id="chartGroup"></select></label><label>指标 <select id="chartMetric"></select></label><label>计算 <select id="chartOperation"><option value="sum">合计</option><option value="mean">均值</option><option value="count">行数</option></select></label></div></div><div id="analysisChart"></div><p id="chartHint" class="tiny"></p></div>
+      <label class="flow-field">你想从这些数据里了解什么？<textarea id="analysisQuestion" rows="2" placeholder="例如：比较各地区销售表现，指出成本变化与数据局限。"></textarea></label>
+      <div class="flow-actions"><button id="analysisPrepare" class="primary">准备模型分析</button><button id="analysisWorkbook" class="secondary">下载 Excel 报表</button><button id="analysisCSV" class="text-btn">CSV</button><button id="analysisReport" class="text-btn">统计说明</button><button id="analysisSVG" class="text-btn">图表 SVG</button></div>
+    </div>
+  </section>
+  <section id="researchFlow" role="tabpanel" aria-labelledby="flowResearch" hidden>
+    <div class="flow-intro"><h3>让结论有据可查</h3><p>读取公开网页，或导入已有资料。报告引用会对应到这次实际提供的段落。</p></div>
+    <div class="flow-columns"><div>
+      <label class="flow-field">研究问题<textarea id="researchQuestion" rows="3" placeholder="例如：比较三种产品的成本与适用场景，范围截至本月。"></textarea></label>
+      <label class="flow-field">网页地址<input id="researchURL" type="url" placeholder="https://…"></label>
+      <div class="flow-actions"><button id="researchFetch" class="secondary">读取网页</button><button id="researchSearch" class="text-btn">搜索资料</button></div>
+      <div class="flow-actions"><button id="researchImport" class="secondary">导入资料</button><button id="researchPaste" class="text-btn">粘贴正文</button></div>
+      <p class="tiny">网页会申请该网站的读取权限。登录内容、动态页面和扫描 PDF 可能无法读取，可粘贴正文补充。</p>
+      <button id="researchPrepare" class="primary">准备调研报告</button><p id="researchPackHint" class="tiny"></p>
+    </div><div><div class="source-list-heading"><h4>报告材料 <span id="researchSourceCount">0</span></h4><button id="researchSelectAll" class="text-btn">全选</button><button id="researchSelectNone" class="text-btn">取消选择</button></div><ul id="researchSources" class="flow-sources"></ul></div></div>
+  </section>
+  <section id="knowledgeFlow" role="tabpanel" aria-labelledby="flowKnowledge" hidden>
+    <div class="flow-intro"><h3>从自己的资料里找答案</h3><p>先在本机找相关段落，再把选中的证据交给模型。回答中的出处可以展开查看。</p></div>
+    <div class="flow-columns"><div>
+      <label class="flow-field">这次要做什么？<select id="knowledgeMode"><option value="qa">根据资料回答问题</option><option value="organize">整理分类索引与摘要</option></select></label>
+      <label class="flow-field">问题或整理要求<textarea id="knowledgeQuestion" rows="3" placeholder="例如：差旅报销要在几天内提交？需要哪些凭证？"></textarea></label>
+      <div class="flow-actions"><button id="knowledgeRetrieve" class="secondary">查找相关段落</button><button id="knowledgePrepare" class="primary">准备资料问答</button></div>
+      <p id="knowledgeHint" class="tiny">中文和英文关键词均可检索，最多选取 8 个相关段落。</p><ul id="knowledgeMatches" class="flow-matches"></ul>
+    </div><div><div class="source-list-heading"><h4>资料库 <span id="knowledgeSourceCount">0</span></h4><button id="knowledgeImport" class="text-btn">导入</button><button id="knowledgePaste" class="text-btn">粘贴</button></div><div class="flow-actions"><input id="sourceSearch" type="search" placeholder="查找资料标题或正文" aria-label="查找资料"><select id="sourceCategory" aria-label="资料分类"><option value="">全部分类</option></select></div><ul id="knowledgeSources" class="flow-sources"></ul></div></div>
+  </section>
+  <div id="flowStatus" class="flow-status" role="status" hidden></div>
+  <details id="citationPanel" class="flow-details" hidden><summary>查看答案出处 <span id="citationCount"></span></summary><p id="citationHint" class="tiny"></p><ul id="workflowCitations" class="flow-matches"></ul></details>
+  <details class="flow-details"><summary>资料保存与备份</summary><p class="tiny">表格和资料正文保存在当前浏览器。备份包含这些内容，不包含 API Key；模型分析需点击下方“开始互审”。</p><div class="flow-actions"><button id="workflowBackup" class="secondary">备份流程资料</button><label class="file-button">恢复资料<input id="workflowRestore" type="file" accept=".json,application/json"></label><button id="workflowClear" class="text-btn danger">清空流程资料</button></div></details>
+  <input id="sourceFiles" type="file" accept=".txt,.md,.docx,.pdf" multiple hidden>
+</section>
+<dialog id="sourceDialog" class="workspace-dialog source-dialog"><div class="dialog-heading"><h2 id="sourceDialogTitle">添加资料</h2><button id="sourceDialogClose" class="text-btn">关闭</button></div><div class="flow-actions"><label class="flow-field">标题<input id="sourceTitle" maxlength="180"></label><label class="flow-field">分类<input id="sourceTag" maxlength="40" placeholder="未分类"></label></div><label class="flow-field">来源链接（可选）<input id="sourceURL" type="url" placeholder="https://…"></label><label class="flow-field">正文<textarea id="sourceText" rows="12"></textarea></label><p id="sourceLocation" class="tiny"></p><div class="flow-actions"><button id="sourceSave" class="primary">保存资料</button><span id="sourceSaveStatus" class="tiny" role="status"></span></div></dialog>

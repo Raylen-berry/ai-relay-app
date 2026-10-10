@@ -13,6 +13,7 @@ let addingFiles = false;
 let engine;
 let taskWindow;
 let extras;
+let workflows;
 let saveChain = Promise.resolve();
 let saveTimer;
 let transient = null;
@@ -147,6 +148,7 @@ function render() {
     progress.append(span);
   });
   extras?.render();
+  workflows?.render();
   if (transient && transient.until > Date.now()) {
     $('status').textContent = transient.text;
     if (transient.error) {$('error').textContent = transient.text; $('error').hidden = false;}
@@ -275,6 +277,10 @@ async function initialize() {
   engine = new RelayEngine(extras?extras.io(io):io, async () => {render(); await store(); await extras?.changed();});
   await loadSaved();
   extras?.renderAPI();
+  if(globalThis.RelayWorkflows){
+    workflows=RelayWorkflows.init({extension:isExtension,writable:()=>!lockedElsewhere,busy:()=>engine?.locked||engine?.run?.status==='running'||extras?.queueRunning(),config:()=>config,run:()=>engine?.run,result:()=>engine?.run?.finalOut||imported?.finalOut||'',message,readForm,store,cancelActive:async()=>{await extras?.changed();await extras?.cancelActive();},setConfig:value=>{clearTimeout(saveTimer);engine.run=null;imported=null;taskWindow=null;config=value;populateForm();render();}});
+    await workflows.load().catch(e=>message('流程资料暂未读取：'+e.message,true));
+  }
   let savedLayout;
   try {savedLayout=isExtension ? (await chrome.storage.local.get('relayLayout')).relayLayout : JSON.parse(localStorage.getItem('aiRelayLayout'));} catch {}
   layout=RelayLayout.init(savedLayout, value => {
@@ -323,7 +329,7 @@ async function initialize() {
       imported = {...C.importData({config: r, run: r, finalOut: r.finalOut}), previous: true};
     }
     await extras?.cancelActive();
-    engine.run = null; taskWindow = null; config.q = ''; config.attachments=[]; transient = null;
+    engine.run = null; taskWindow = null; config.q = ''; config.attachments=[]; delete config.workflow; transient = null;
     $('manual').value = ''; populateForm(); render(); await store();
     $('question').focus(); message('可以输入新问题；上次结果暂时保留在右侧，开始新互审后更新。');
   });
@@ -410,7 +416,7 @@ async function initialize() {
   bind('resetTemplates', async () => {config.templates = {...C.templates}; populateForm(); await store(); message('已恢复默认提示词。');});
   bind('clear', async () => {
     if (!confirm('清空此浏览器中的工作台记录和问题？模型网站上的聊天不会被删除。')) return;
-    addingFiles=true;engine.run = null; imported = null; config.q = ''; config.attachments=[]; $('manual').value = ''; populateForm(); render();
+    addingFiles=true;engine.run = null; imported = null; config.q = ''; config.attachments=[]; delete config.workflow; $('manual').value = ''; populateForm(); render();
     try{await extras?.clear();await store();await pruneFiles();message('本地记录与附件缓存已清空。');}finally{addingFiles=false;render();}
   });
   window.addEventListener('beforeunload', e => {
@@ -423,7 +429,7 @@ async function initialize() {
     // Queue for ownership: when an older window closes this one must recover.
     navigator.locks.request('ai-relay-runner', async () => {
       // Re-read after acquisition, never resume using a stale waiting-window copy.
-      await extras?.load(); await loadSaved(); lockedElsewhere = false; checkingOwner=false;clearTimeout(ownerNoticeTimer);transient = null;
+      await extras?.load(); await loadSaved(); await workflows?.load().catch(e=>message('流程资料暂未读取：'+e.message,true)); lockedElsewhere = false; checkingOwner=false;clearTimeout(ownerNoticeTimer);transient = null;
       await pruneFiles().catch(e=>message('附件缓存整理未完成：'+e.message,true));
       populateForm(); render(); extras?.renderAPI();await extras?.changed();
       setInterval(async () => {try {await extras?.pump();await engine.tick(); render();} catch(e) {message(e.message, true);}}, 1500);

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "AI 互审 · Relay",
-  "description": "使用已登录的模型网页，自动完成初稿、交叉审核和回传定稿。",
-  "version": "0.6.1",
+  "description": "多模型互审，并提供数据分析、调研报告和资料问答流程。",
+  "version": "0.7.0",
   "minimum_chrome_version": "114",
   "permissions": [
     "storage",

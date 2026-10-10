@@ -32,6 +32,7 @@
   }
   function snapshot(run,providers){
     const safe={};for(const k of ['id','q','primary','reviewer','third','sequence','timeout','templates','reviewRoles','outputs','turns','finalOut','status','created','timing','route'])if(run[k]!==undefined)safe[k]=structuredClone(run[k]);
+    if(root.RelayWorkflowData){const metadata=root.RelayWorkflowData.meta(run.workflow);if(metadata)safe.workflow=metadata;}
     safe.attachments=(run.attachments||[]).map(({name,size,type})=>({name,size,type}));
     safe.names=(run.route||[]).map(role=>providers[run[role]]?.name||run[role]);return safe;
   }

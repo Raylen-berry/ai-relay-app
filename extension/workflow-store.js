@@ -1,0 +1,6 @@
+(function(root){
+  'use strict';let opening;
+  const db=()=>opening ||= new Promise((resolve,reject)=>{const r=indexedDB.open('ai-relay-workflows',1);r.onupgradeneeded=()=>r.result.createObjectStore('items',{keyPath:'id'});r.onsuccess=()=>resolve(r.result);r.onerror=()=>{opening=null;reject(Error('无法打开流程资料库。'));};});
+  async function transact(mode,action){const d=await db();return new Promise((resolve,reject)=>{const tx=d.transaction('items',mode);let out;tx.oncomplete=()=>resolve(out);tx.onerror=tx.onabort=()=>reject(Error('资料保存失败，请检查浏览器存储空间。'));action(tx.objectStore('items'),v=>{out=v;});});}
+  const api={get:async id=>transact('readonly',(s,done)=>{s.get(id).onsuccess=e=>done(e.target.result?.value);}),put:async(id,value)=>transact('readwrite',s=>s.put({id,value:structuredClone(value)})),clear:async()=>transact('readwrite',s=>s.clear())};root.RelayWorkflowStore=api;
+})(globalThis);

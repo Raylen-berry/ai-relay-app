@@ -99,6 +99,7 @@
       const t = src.templates?.[stage] ?? src[old];
       if (typeof t === 'string' && t.trim()) config.templates[stage] = t;
     }
+    config.workflow=root.RelayWorkflowData?.meta(src.workflow);
     // Never import live tab IDs, pending sends, or a running state.
     const outputs = {};
     for (const [stage, old] of [['first','firstOut'],['review','reviewOut'],['final','lastOut']]) {

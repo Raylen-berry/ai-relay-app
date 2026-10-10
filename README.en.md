@@ -8,11 +8,11 @@ AI Relay connects the steps you would otherwise do by hand in model web apps: as
 
 It works with the web versions of DeepSeek, ChatGPT, and Kimi, using your signed-in browser accounts. You can also configure DeepSeek or a compatible API service. Website reviews do not require an API Key, and everyday use does not require Node or Python.
 
-Current version: **0.6.1 beta** for Windows, with Chrome or Edge.
+Current version: **0.7.0 beta** for Windows, with Chrome or Edge.
 
 ## Install
 
-1. [Download the Windows package](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.6.1/AI-Relay-0.6.1-Windows.zip) and extract the whole archive.
+1. [Download the Windows package](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.7.0/AI-Relay-0.7.0-Windows.zip) and extract the whole archive.
 2. Run `安装到本机.cmd`. It installs to `%LOCALAPPDATA%\Programs\AI-Relay` by default and creates desktop and Start menu shortcuts.
 3. Open `chrome://extensions/` or `edge://extensions/` in the browser you want to use. Turn on **Developer mode**, choose **Load unpacked**, and select the **extension folder inside the installation directory**.
 4. Sign into the model websites in that browser, then open the desktop shortcut named “AI 互审”.
@@ -39,6 +39,36 @@ Keep the workbench and task pages open while a task runs. Once the final answer 
 Results open in “阅读” (**Reading**) view, with headings, tables, lists, and code blocks. Choose “原文” (**Raw text**) to see the collected Markdown. “复制结果” (**Copy result**) copies that text; code blocks have their own copy button.
 
 Relay uses whichever model and mode each website currently has selected. Start with a short question when trying a new setup.
+
+## Three new workflows
+
+Use the tabs at the top of the workbench for **Data analysis**, **Research report**, or **Document Q&A**. Prepare the material, choose models and a review route below, then start the review. File processing, charts, and document search run locally. Preparing a task does not call a model.
+
+### Data analysis
+
+Import CSV, TSV, or XLSX with column names in the first row. Excel workbooks support sheet selection. The panel counts rows, columns, missing cells, and duplicates, and calculates totals, means, medians, ranges, and sample standard deviations for numeric columns. Mixed columns remain text; missing values are not replaced with zero. Formula cells use existing cached values and are not recalculated.
+
+Trimming spaces, removing empty rows, and removing duplicates are explicit actions; the imported data can be restored. Charts respond to group, metric, and aggregation choices. Download an Excel report with data, column statistics, and all groups, or download CSV, an SVG chart, and the statistics note separately.
+
+Model preparation includes full-table statistics, up to 100 groups, and at most 15 sample rows. The model can interpret results and review assumptions; other metrics still need calculation. Limits: 5,000 data rows and 100 columns per sheet, 20 sheets and 100,000 cells per workbook, and 10 MB per file.
+
+### Research report
+
+Enter a research question, open a search page to choose sources, and read public HTTPS pages by URL. Existing documents or pasted text can be used too. Reading a page requests access to that origin and stores its text, URL, and retrieval time. It omits login cookies and blocks redirects. Dynamic, private, or restricted pages may need pasted text. Sources start unverified and can be marked after you check them.
+
+Select materials and prepare a report. The supplied paragraphs get IDs such as [S1:P2] for model citations. The report prompt asks for scope, findings, disagreements, limitations, and recommendations. Long documents share a text budget, with partial coverage stated explicitly. After completion, citations open the actual supplied excerpts; unknown IDs are flagged. Matching an ID establishes that the paragraph exists, not that it supports the claim.
+
+### Document organization and Q&A
+
+Import TXT, Markdown, DOCX, or text-based PDF, or paste text. Edit titles, categories, contents, and source URLs. Word body text and tables are extracted; PDFs preserve page locators but scanned images need OCR elsewhere. Limits: 10 MB and 200,000 characters per document, 200 PDF pages, and 50 documents totaling one million characters.
+
+Q&A uses local Chinese and English keyword retrieval to select up to eight relevant paragraphs. Remove irrelevant matches before preparing the question. A missing match requests more evidence. Organization mode prepares a classified index and summary. Vector retrieval is not part of this version.
+
+Existing Markdown, Word, and PDF exports work with these results. Exports append cited paragraph snapshots and flag IDs that were not supplied. Saved tasks retain their original excerpts after source edits or deletion.
+
+The current browser stores the table and collection. Workflow backups include both data and text, exclude API keys, and never start model tasks when restored. Clear workflow materials separately from saved review history. See the [trial guide](三项流程试用指南.md) and the included [sample materials](示例资料).
+
+## Task management and results
 
 ### Task library and queue
 
@@ -96,9 +126,11 @@ The JSON includes attachment metadata, but not the original files. Keep those fi
 
 The browser extension operates the model pages. The Windows launcher helps with installation and opening the workbench.
 
-The extension requests local storage, clipboard access, and access to the three model websites. API origins and desktop notifications require separate optional permission when enabled. It does not read cookies and has no telemetry or remotely loaded code. Website mode sends through the model pages; API mode calls your configured endpoint directly.
+The extension requests local storage, clipboard access, and access to the three model websites. API origins, research-source origins, and desktop notifications require separate optional permission when enabled. It does not read cookies and has no telemetry or remotely loaded code. Website mode sends through the model pages; API mode calls your configured endpoint directly.
 
-Answer collection checks the round's end marker, generation state, and a period of stable output. Research and agent workflows, and the Kimi desktop app, are outside the current scope.
+Answer collection checks the round's end marker, generation state, and a period of stable output. The answer collector does not support model websites’ deep-research or agent tool modes, or the Kimi desktop app. Workbench research reports use the supplied source excerpts.
+
+This version passed 114 regression tests and 119 independent Chrome checks. All three workflows ran with local files and a simulated compatible API. Source-page and permission responses were mocked; live APIs still need validation with a real Key.
 
 Version 0.6.0 passed 103 local tests and 49 independent Chrome feature/boundary checks, including two five-round queue tasks against a local simulated API. Live provider APIs have not been tested with a real Key. Notification delivery was mocked in the checks; actual display depends on browser and system settings. Website testing from 0.5.2 is recorded below. On this computer in Chrome, both a three-round text-only task and a five-round `1-2-1-2-1` task with an image and a text file completed using DeepSeek and ChatGPT. Later rounds reused attachments in the original conversations, and the final checks were correct. Kimi was not rechecked in this round; other accounts and modes still need their own checks. See the [validation log](验证记录.md) and [change log](更新记录.md), both in Chinese.
 
@@ -127,6 +159,7 @@ The launcher build uses the system .NET Framework C# compiler. Archives and chec
 | --- | --- |
 | `extension/workspace.js`, `workspace-data.js`, `workspace.css` | Task library, queue, comparison, and checks |
 | `extension/api.js`, `exports.js`, `print.*` | Optional API, Word export, and PDF print view |
+| `extension/workflows*.js`, `workflow-parser.js` | Data analysis, material storage, retrieval, and citations |
 | `extension/app.*`, `app-polish.css` | Workbench interface and local records |
 | `extension/engine.js`, `issues.js` | Multi-round task flow and stall guidance |
 | `extension/markdown-source.js`, `markdown.js` | Answer formatting and result reading view |
@@ -139,6 +172,8 @@ The launcher build uses the system .NET Framework C# compiler. Archives and chec
 Keep the `key` in `manifest.json`. Changing it changes the extension ID and breaks the connection to existing shortcuts and local data. After changing page adapters, reload the extension and refresh its model task pages.
 
 ## Recent changes
+
+**0.7.0**: Added data analysis, research reports, and document organization/Q&A: local statistics and charts, Excel reports, page-text retrieval, Word/PDF sources, keyword search, and paragraph citations in exports.
 
 **0.6.1**: Removed an unsupported IPv6 CSP source that Chrome reported as a warning. Local HTTP API connections use localhost or 127.0.0.1.
 
