@@ -8,11 +8,11 @@ AI Relay connects the steps you would otherwise do by hand in model web apps: as
 
 It works with the web versions of DeepSeek, ChatGPT, and Kimi, using your signed-in browser accounts. You can also configure DeepSeek or a compatible API service. Website reviews do not require an API Key, and everyday use does not require Node or Python.
 
-Current version: **0.6.0 beta** for Windows, with Chrome or Edge.
+Current version: **0.6.1 beta** for Windows, with Chrome or Edge.
 
 ## Install
 
-1. [Download the Windows package](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.6.0/AI-Relay-0.6.0-Windows.zip) and extract the whole archive.
+1. [Download the Windows package](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.6.1/AI-Relay-0.6.1-Windows.zip) and extract the whole archive.
 2. Run `安装到本机.cmd`. It installs to `%LOCALAPPDATA%\Programs\AI-Relay` by default and creates desktop and Start menu shortcuts.
 3. Open `chrome://extensions/` or `edge://extensions/` in the browser you want to use. Turn on **Developer mode**, choose **Load unpacked**, and select the **extension folder inside the installation directory**.
 4. Sign into the model websites in that browser, then open the desktop shortcut named “AI 互审”.
@@ -139,6 +139,9 @@ The launcher build uses the system .NET Framework C# compiler. Archives and chec
 Keep the `key` in `manifest.json`. Changing it changes the extension ID and breaks the connection to existing shortcuts and local data. After changing page adapters, reload the extension and refresh its model task pages.
 
 ## Recent changes
+
+**0.6.1**: Removed an unsupported IPv6 CSP source that Chrome reported as a warning. Local HTTP API connections use localhost or 127.0.0.1.
+
 
 **0.6.0**: Added a searchable task library with tags, a batch queue, per-round review roles, draft comparison, candidate issues and source links. Added Markdown/Word exports, PDF printing, optional API connections, and desktop reminders.
 

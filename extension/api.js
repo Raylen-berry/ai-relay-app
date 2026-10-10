@@ -3,7 +3,7 @@
   function endpoint(value){
     let u;try{u=new URL(String(value).trim());}catch{throw new Error('请填写完整的接口地址。');}
     if(u.username||u.password||u.search||u.hash)throw new Error('接口地址不能包含密码、查询参数或片段。');
-    if(u.protocol!=='https:'&&!(u.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(u.hostname)))throw new Error('请使用 HTTPS；本机服务可使用 localhost 或 127.0.0.1 的 HTTP 地址。');
+    if(u.protocol!=='https:'&&!(u.protocol==='http:'&&['localhost','127.0.0.1'].includes(u.hostname)))throw new Error('请使用 HTTPS；本机服务可使用 localhost 或 127.0.0.1 的 HTTP 地址。');
     const path=u.pathname.replace(/\/+$/,'');u.pathname=path.endsWith('/chat/completions')?path:path+'/chat/completions';return u.href;
   }
   function profile(raw){

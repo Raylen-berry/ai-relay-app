@@ -8,11 +8,11 @@
 
 目前支持 DeepSeek、ChatGPT 和 Kimi 的网页版，使用浏览器里已登录的账号。也可以自行配置 DeepSeek 或兼容接口的 API。网页互审不需要 Key，日常使用不用安装 Node 或 Python。
 
-当前版本：**0.6.0 测试版**，适用于 Windows 上的 Chrome 和 Edge。
+当前版本：**0.6.1 测试版**，适用于 Windows 上的 Chrome 和 Edge。
 
 ## 安装
 
-1. [下载 Windows 安装包](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.6.0/AI-Relay-0.6.0-Windows.zip)，完整解压。
+1. [下载 Windows 安装包](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.6.1/AI-Relay-0.6.1-Windows.zip)，完整解压。
 2. 双击 `安装到本机.cmd`。默认安装到 `%LOCALAPPDATA%\Programs\AI-Relay`，并创建桌面和开始菜单快捷方式。
 3. 打开所用浏览器的扩展管理页：Chrome 是 `chrome://extensions/`，Edge 是 `edge://extensions/`。开启“开发者模式”（Edge 中叫“开发人员模式”），点“加载已解压的扩展”，选择**安装目录里的 `extension` 文件夹**。
 4. 在这个浏览器里登录本次要用的模型，然后双击桌面的“AI 互审”。
@@ -141,6 +141,9 @@ npm run package
 图标源文件在 `assets/relay-icon.svg`，设计文件在 `design/icon-options`。
 
 ## 最近更新
+
+**0.6.1**：移除 Chrome 不接受的 IPv6 连接策略写法，修复扩展管理页的警告。自定义本机 HTTP 接口使用 localhost 或 127.0.0.1。
+
 
 **0.6.0**：加入任务库与标签、批量队列、每轮审核分工、初稿对比、候选事项和引用来源；支持 Markdown、Word 与打印保存 PDF，新增可选 API 和桌面通知。
 

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "AI 互审 · Relay",
   "description": "使用已登录的模型网页，自动完成初稿、交叉审核和回传定稿。",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "minimum_chrome_version": "114",
   "permissions": [
     "storage",
@@ -51,7 +51,7 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'self' https: http://localhost:* http://127.0.0.1:* http://[::1]:*"
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'self' https: http://localhost:* http://127.0.0.1:*"
   },
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAx9ZTa+gW7i/cI5OcrMitl6WYgEP1/BN7tOe/eIGZFpodXOVsnCI5xPY/AwWaN+vC+qJuOQeX0TUtLGNkNbi6G+v2TJ4oPRLFYStYBmF12B93PC/uNITti540zod0zeSEWFN4WVXGqQVu6pBKQp2LWY7z5/6P+oE+MgRyIVFg40Oum8N/S9GbmneO9h8T9d28ZX/Coud2/6g0gs9AKq4TLCrsb+1MZ0/48HVtQRQFA3EYp5OqBWplhn2o43OYRgmOrdR3Idtt2zyEFJhF7ECrDoUVRujWCMRB6QhWKbnyMbOquYtDa/gKaatQYImEYSvjmWiWXGPNG3ARFKNBMYtVsQIDAQAB",
   "optional_permissions": [
@@ -60,7 +60,6 @@
   "optional_host_permissions": [
     "https://*/*",
     "http://localhost/*",
-    "http://127.0.0.1/*",
-    "http://[::1]/*"
+    "http://127.0.0.1/*"
   ]
 }
