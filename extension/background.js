@@ -27,6 +27,16 @@ async function openApp(sourceId) {
 }
 function launch(id) {const result=opening.catch(()=>{}).then(()=>openApp(id));opening=result;return result;}
 chrome.action.onClicked.addListener(() => launch().catch(console.error));
+let notificationsBound = false;
+function bindNotifications() {
+  if (notificationsBound || !chrome.notifications?.onClicked) return;
+  notificationsBound = true;
+  chrome.notifications.onClicked.addListener(id => {
+    if (id.startsWith('relay-')) launch().catch(console.error);
+  });
+}
+bindNotifications();
+chrome.permissions?.onAdded?.addListener(bindNotifications);
 chrome.runtime.onMessage.addListener((msg,sender,reply)=>{
   if(sender.id!==chrome.runtime.id || sender.url!==chrome.runtime.getURL('open.html') || msg?.type!=='RELAY_OPEN_APP')return;
   launch(msg.tabId).then(reply).catch(e=>reply({ok:false,error:e.message}));return true;

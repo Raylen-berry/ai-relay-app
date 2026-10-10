@@ -12,6 +12,7 @@ let ownerNoticeTimer;
 let addingFiles = false;
 let engine;
 let taskWindow;
+let extras;
 let saveChain = Promise.resolve();
 let saveTimer;
 let transient = null;
@@ -20,7 +21,7 @@ let outputMode = 'preview';
 let renderedResult = null;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 function readForm() {
-  config = {q: $('question').value, attachments:config.attachments || [], primary: $('primary').value, reviewer: $('reviewer').value,
+  config = {...config, q: $('question').value, attachments:config.attachments || [], primary: $('primary').value, reviewer: $('reviewer').value,
     third:$('third').value, sequence:$('sequence').value,
     timeout: Number($('timeout').value), templates: {first: $('templateFirst').value, review: $('templateReview').value, final: $('templateFinal').value}};
 }
@@ -145,6 +146,7 @@ function render() {
     span.classList.toggle('complete',!!r && (i<r.stageIndex || r.status==='done'));
     progress.append(span);
   });
+  extras?.render();
   if (transient && transient.until > Date.now()) {
     $('status').textContent = transient.text;
     if (transient.error) {$('error').textContent = transient.text; $('error').hidden = false;}
@@ -179,7 +181,7 @@ function renderFiles() {
 }
 async function pruneFiles() {
   if(!globalThis.indexedDB)return;
-  await RelayFiles.retain([...(config.attachments||[]),...(engine.run?.attachments||[])].map(f=>f.id));
+  await RelayFiles.retain([...(config.attachments||[]),...(engine.run?.attachments||[])].map(f=>f.id).concat(extras?.attachmentIds()||[]));
 }
 async function addFiles(files) {
   if($('chooseFiles').disabled || !files.length)return;
@@ -262,8 +264,17 @@ async function loadSaved() {
   engine.restore(saved?.run || null);
 }
 async function initialize() {
-  engine = new RelayEngine(io, async () => {render(); await store();});
+  if(globalThis.RelayWorkspace) {
+    extras=RelayWorkspace.init({extension:isExtension,config:()=>config,run:()=>engine?.run,writable:()=>!lockedElsewhere,busy:()=>engine?.locked||engine?.run?.status==='running',message,store,readForm,populate:populateForm,render,prune:pruneFiles,
+      setConfig:value=>{engine.run=null;imported=null;taskWindow=null;config=value;populateForm();render();},
+      checkFiles:async files=>{RelayFiles.validate(files);for(const file of files)await RelayFiles.get(file);},
+      start:async value=>{imported=null;await engine.begin(value);await engine.tick();render();},
+      resume:async()=>{await engine.resume();await engine.tick();render();}
+    });await extras.load();
+  }
+  engine = new RelayEngine(extras?extras.io(io):io, async () => {render(); await store(); await extras?.changed();});
   await loadSaved();
+  extras?.renderAPI();
   let savedLayout;
   try {savedLayout=isExtension ? (await chrome.storage.local.get('relayLayout')).relayLayout : JSON.parse(localStorage.getItem('aiRelayLayout'));} catch {}
   layout=RelayLayout.init(savedLayout, value => {
@@ -299,7 +310,7 @@ async function initialize() {
   bind('start', async () => {
     if (!isExtension || lockedElsewhere || engine.locked) return;
     if (engine.run && engine.run.status !== 'done' && !confirm('开始一个新任务？当前未完成的任务将被替换；如需接着处理，请点击“继续当前步骤”。')) return;
-    readForm(); C.validate(config); imported = null;
+    readForm(); C.validate(config); await extras?.preflight(config); await extras?.cancelActive(); imported = null;
     RelayFiles.validate(config.attachments);
     for(const file of config.attachments)await RelayFiles.get(file);
     await engine.begin(config); await engine.tick(); render();
@@ -311,6 +322,7 @@ async function initialize() {
       const r = engine.run;
       imported = {...C.importData({config: r, run: r, finalOut: r.finalOut}), previous: true};
     }
+    await extras?.cancelActive();
     engine.run = null; taskWindow = null; config.q = ''; config.attachments=[]; transient = null;
     $('manual').value = ''; populateForm(); render(); await store();
     $('question').focus(); message('可以输入新问题；上次结果暂时保留在右侧，开始新互审后更新。');
@@ -361,6 +373,7 @@ async function initialize() {
       if (!isExtension) {message('请在已安装的扩展中打开工作台。'); return;}
       const tab = engine.run?.tabs[role];
       if (tab) await io.activate(tab.id);
+      else if(C.providers[config[role]]?.kind==='api')message('API 模型在工作台直接收取回答，可在设置中修改连接。');
       else await chrome.tabs.create({url: C.providers[config[role]].url});
     });
   }
@@ -398,7 +411,7 @@ async function initialize() {
   bind('clear', async () => {
     if (!confirm('清空此浏览器中的工作台记录和问题？模型网站上的聊天不会被删除。')) return;
     addingFiles=true;engine.run = null; imported = null; config.q = ''; config.attachments=[]; $('manual').value = ''; populateForm(); render();
-    try{await store();await pruneFiles();message('本地记录与附件缓存已清空。');}finally{addingFiles=false;render();}
+    try{await extras?.clear();await store();await pruneFiles();message('本地记录与附件缓存已清空。');}finally{addingFiles=false;render();}
   });
   window.addEventListener('beforeunload', e => {
     if (engine.run?.status === 'running') {e.preventDefault(); e.returnValue = '';}
@@ -410,10 +423,10 @@ async function initialize() {
     // Queue for ownership: when an older window closes this one must recover.
     navigator.locks.request('ai-relay-runner', async () => {
       // Re-read after acquisition, never resume using a stale waiting-window copy.
-      await loadSaved(); lockedElsewhere = false; checkingOwner=false;clearTimeout(ownerNoticeTimer);transient = null;
+      await extras?.load(); await loadSaved(); lockedElsewhere = false; checkingOwner=false;clearTimeout(ownerNoticeTimer);transient = null;
       await pruneFiles().catch(e=>message('附件缓存整理未完成：'+e.message,true));
-      populateForm(); render();
-      setInterval(async () => {try {await engine.tick(); render();} catch(e) {message(e.message, true);}}, 1500);
+      populateForm(); render(); extras?.renderAPI();await extras?.changed();
+      setInterval(async () => {try {await extras?.pump();await engine.tick(); render();} catch(e) {message(e.message, true);}}, 1500);
       await new Promise(() => {});
     }).catch(e => message('无法连接工作台：' + e.message + '。请关闭其他工作台后重新打开。', true));
   }

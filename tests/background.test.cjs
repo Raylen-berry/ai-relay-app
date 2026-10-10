@@ -3,6 +3,14 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 
+test('optional notification click binding activates after permission grant and reuses the workbench',async()=>{
+  let permissionAdded,notificationClick,focused=0,bindings=0;
+  const chrome={storage:{local:{setAccessLevel:async()=>{}}},runtime:{getURL:f=>'chrome-extension://relay/'+f,onMessage:{addListener(){}}},action:{onClicked:{addListener(){}}},permissions:{onAdded:{addListener:fn=>permissionAdded=fn}},tabs:{update:async()=>{}},windows:{getAll:async()=>[{id:1,tabs:[{id:2,url:'chrome-extension://relay/app.html'}]}],update:async()=>{focused++;},create:async()=>{throw Error('should focus existing');}}};
+  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname,'../extension/background.js'),'utf8'),{chrome,console});
+  chrome.notifications={onClicked:{addListener:fn=>{bindings++;notificationClick=fn;}}};permissionAdded();permissionAdded();assert.equal(bindings,1);
+  notificationClick('unrelated');await new Promise(setImmediate);assert.equal(focused,0);notificationClick('relay-task');await new Promise(setImmediate);assert.equal(focused,1);
+});
+
 test('extension reload does not open a workbench until its icon is clicked',async()=>{
   let click,installed=false;
   const chrome={storage:{local:{setAccessLevel:async()=>{}}},runtime:{getURL:f=>'chrome-extension://relay/'+f,

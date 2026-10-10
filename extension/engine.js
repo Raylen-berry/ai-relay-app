@@ -99,7 +99,7 @@
       const taskId = this.uid();
       const prompt = C.promptFor(this.run, stage, marker);
       this.run.pending = {taskId, marker, phase:'prepared', started:this.now(), prompt,
-        parts:C.splitPrompt(prompt, taskId), partIndex:0};
+        parts:C.providers[this.run[role]]?.kind === 'api' ? [{prompt,marker:null}] : C.splitPrompt(prompt, taskId), partIndex:0};
       if (before) {
         this.run.pending.answerCountBefore = before.answers.length;
         this.run.pending.answerTextBefore = before.answers.at(-1)?.text || '';
