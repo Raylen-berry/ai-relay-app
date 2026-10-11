@@ -8,11 +8,11 @@
 
 支持 DeepSeek、ChatGPT 和 Kimi 网页，使用浏览器中已登录的账号。API 是可选项，支持 DeepSeek 和兼容 Chat Completions 的文字接口。日常使用不需要安装 Node 或 Python。
 
-当前版本：**0.8.1 测试版**，适用于 Windows 上的 Chrome 和 Edge。
+当前版本：**0.8.2 测试版**，适用于 Windows 上的 Chrome 和 Edge。
 
 ## 安装
 
-1. [下载 Windows 安装包](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.8.1/AI-Relay-0.8.1-Windows.zip)，完整解压。
+1. [下载 Windows 安装包](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.8.2/AI-Relay-0.8.2-Windows.zip)，完整解压。
 2. 双击 `安装到本机.cmd`。默认安装到 `%LOCALAPPDATA%\Programs\AI-Relay`，并创建桌面和开始菜单快捷方式。
 3. 双击桌面的“AI 互审”，打开本机工作台。资料、任务库和可选 API 可以直接使用。
 4. 使用网页模型时，再在 `chrome://extensions/` 或 `edge://extensions/` 开启开发者模式，加载**安装目录中的 extension 文件夹**，并在同一浏览器配置中登录模型。使用已解压扩展期间需要保留开发者模式。

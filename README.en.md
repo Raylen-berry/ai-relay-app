@@ -8,11 +8,11 @@ Relay brings material preparation, model execution and result checking into one 
 
 It works with signed-in DeepSeek, ChatGPT and Kimi websites. DeepSeek and compatible Chat Completions text APIs are optional. Normal use does not require Node or Python.
 
-Current version: **0.8.1 beta**, for Chrome and Edge on Windows.
+Current version: **0.8.2 beta**, for Chrome and Edge on Windows.
 
 ## Install
 
-1. [Download the Windows package](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.8.1/AI-Relay-0.8.1-Windows.zip) and extract it completely.
+1. [Download the Windows package](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.8.2/AI-Relay-0.8.2-Windows.zip) and extract it completely.
 2. Run `安装到本机.cmd`. It installs to `%LOCALAPPDATA%\Programs\AI-Relay` and creates desktop and Start menu shortcuts.
 3. Open the desktop shortcut to start the local workspace. Materials, history and optional APIs work without the extension.
 4. For website models, enable Developer mode at `chrome://extensions/` or `edge://extensions/`, load the **installed extension folder**, and sign in to the models in that profile. Keep Developer mode enabled while using the unpacked extension.

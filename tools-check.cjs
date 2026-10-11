@@ -3,6 +3,7 @@ const fs = require('node:fs'), path = require('node:path'), vm = require('node:v
 const dir = path.join(__dirname, 'extension');
 const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
 assert.equal(manifest.version, require('./package.json').version);
+for(const permission of manifest.optional_host_permissions||[])assert.ok(!(manifest.host_permissions||[]).includes(permission),'Redundant optional host permission: '+permission);
 const lock = require('./package-lock.json');
 assert.equal(lock.version, manifest.version);
 assert.equal(lock.packages[''].version, manifest.version);
