@@ -1,6 +1,7 @@
 (function(root) {
   'use strict';
   const definitions = {
+    'run-limit': ['运行已达到上限', '已有成果保留。需要继续时，可在任务交付区明确增加额度；已发送的请求可能仍在处理。', ['manual']],
     'login-required': ['需要重新登录', '在当前模型网页完成登录，再回来继续。', ['page','retry']],
     'page-unreachable': ['网页暂时未连接', '检查任务网页是否仍打开、是否加载完成，再继续当前步骤。', ['page','retry']],
     'page-closed': ['任务网页已关闭', '可以手动补入这一轮回答，或开始一个新任务。', ['manual']],

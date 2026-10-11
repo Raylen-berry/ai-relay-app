@@ -11,3 +11,10 @@ artifacts/
 Thumbs.db
 relay-state*.json
 ai-relay-20*.json
+
+# Local bindings and private work packages
+browser-profile.json
+installed.txt
+AI-Relay-完整工作包-*.json
+
+data/

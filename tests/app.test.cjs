@@ -130,8 +130,8 @@ test('route shortcuts cannot change the active task while running',async()=>{
     assert.equal(w.get('routeSimple').disabled,true);
     assert.equal(w.get('routeExtended').disabled,true);
     w.get('routeExtended').click();await turn();
-    assert.equal(vm.runInContext('engine.run.sequence',w.context),'1-2-1');
-    assert.equal(w.get('sequence').value,'1-2-1');
+    assert.equal(vm.runInContext('engine.run.sequence',w.context),'1');
+    assert.equal(w.get('sequence').value,'1');
     assert.equal(w.messages.filter(m=>m.type==='RELAY_SEND').length,1);
   } finally {w.cleanup();}
 });

@@ -27,16 +27,17 @@
   async function add(files) {
     validate(files);
     const rows=files.map(blob=>({id:crypto.randomUUID(),name:blob.name,type:blob.type,size:blob.size,lastModified:blob.lastModified,blob}));
-    await transaction('readwrite',store=>rows.forEach(row=>store.put(row)));
+    if(root.RelayNative){for(const {blob,...meta} of rows){const bytes=new Uint8Array(await blob.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));await RelayNative.rpc('write',{area:'files',key:meta.id,value:{...meta,data:btoa(binary)}});}const index=await RelayNative.rpc('read',{area:'files',key:'index'})||[];await RelayNative.rpc('write',{area:'files',key:'index',value:[...index,...rows.map(r=>r.id)]});}else await transaction('readwrite',store=>rows.forEach(row=>store.put(row)));
     return rows.map(({blob,...meta})=>meta);
   }
   async function get(meta) {
-    const row=await transaction('readonly',(store,done)=>{store.get(meta.id).onsuccess=ev=>done(ev.target.result);});
+    const row=root.RelayNative?await RelayNative.rpc('read',{area:'files',key:meta.id}):await transaction('readonly',(store,done)=>{store.get(meta.id).onsuccess=ev=>done(ev.target.result);});
+    if(root.RelayNative&&row?.data){const binary=atob(row.data),bytes=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);row.blob=new Blob([bytes],{type:row.type});}
     if (!row?.blob || row.size !== meta.size || row.name !== meta.name) throw new Error('本地附件丢失：'+meta.name+'。请重新选择附件并开始新任务。');
     return row.blob;
   }
   async function retain(ids) {
-    const keep=new Set(ids);
+    const keep=new Set(ids);if(root.RelayNative){const index=await RelayNative.rpc('read',{area:'files',key:'index'})||[];for(const id of index)if(!keep.has(id))await RelayNative.rpc('remove',{area:'files',key:id});await RelayNative.rpc('write',{area:'files',key:'index',value:index.filter(id=>keep.has(id))});return;}
     await transaction('readwrite',store=>{store.openCursor().onsuccess=ev=>{const c=ev.target.result;if(c){if(!keep.has(c.key))c.delete();c.continue();}};});
   }
   async function upload(send, files, batchId, runId, recovery, active) {

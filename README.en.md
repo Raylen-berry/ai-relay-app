@@ -4,187 +4,98 @@
 
 <img src="assets/relay-128.png" alt="AI Relay icon" width="96">
 
-AI Relay connects the steps you would otherwise do by hand in model web apps: ask one model for a draft, have other models review it, then return to the original conversation to revise the answer.
+Relay brings material preparation, model execution and result checking into one workspace. It keeps the evidence used for each task and records what was checked and what remains unresolved.
 
-It works with the web versions of DeepSeek, ChatGPT, and Kimi, using your signed-in browser accounts. You can also configure DeepSeek or a compatible API service. Website reviews do not require an API Key, and everyday use does not require Node or Python.
+It works with signed-in DeepSeek, ChatGPT and Kimi websites. DeepSeek and compatible Chat Completions text APIs are optional. Normal use does not require Node or Python.
 
-Current version: **0.7.0 beta** for Windows, with Chrome or Edge.
+Current version: **0.8.0 beta**, for Chrome and Edge on Windows.
 
 ## Install
 
-1. [Download the Windows package](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.7.0/AI-Relay-0.7.0-Windows.zip) and extract the whole archive.
-2. Run `安装到本机.cmd`. It installs to `%LOCALAPPDATA%\Programs\AI-Relay` by default and creates desktop and Start menu shortcuts.
-3. Open `chrome://extensions/` or `edge://extensions/` in the browser you want to use. Turn on **Developer mode**, choose **Load unpacked**, and select the **extension folder inside the installation directory**.
-4. Sign into the model websites in that browser, then open the desktop shortcut named “AI 互审”.
+1. [Download the Windows package](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.8.0/AI-Relay-0.8.0-Windows.zip) and extract it completely.
+2. Run `安装到本机.cmd`. It installs to `%LOCALAPPDATA%\Programs\AI-Relay` and creates desktop and Start menu shortcuts.
+3. Open the desktop shortcut to start the local workspace. Materials, history and optional APIs work without the extension.
+4. For website models, enable Developer mode at `chrome://extensions/` or `edge://extensions/`, load the **installed extension folder**, and sign in to the models in that profile. Keep Developer mode enabled while using the unpacked extension.
 
-The install script prefers Edge. To choose Chrome, open `AI互审启动助手.exe`, select Google Chrome, and click “安装到本机 / 创建快捷方式”.
+The installer prefers Edge. To use Chrome, select it in the launch assistant and create the shortcuts. Both the assistant and shortcuts use the configured browser data directory and profile. Updates retain existing bindings; new installations default to Default. Other profiles can be selected through installer parameters.
 
-Loading the extension is a manual step on first use. Keep the installation directory: the browser reads the extension from there. The package includes an [installation guide](开始使用.html) and [instructions for another computer](换机安装.md), both in Chinese.
+The first extension load is manual. Keep the installation folder in place. Current and older packages are in [Releases](https://github.com/Raylen-berry/ai-relay-app/releases), with SHA256 files. Packages contain no account credentials, task data or development dependencies.
 
-Current and older packages are available in [Releases](https://github.com/Raylen-berry/ai-relay-app/releases). The repository root contains source code and documentation. The archive contains no accounts, chat history, or development dependencies. The adjacent `.sha256` file lets you check its integrity.
+## Run a task
 
-## Use it
+1. Enter a question, or prepare a data analysis, research report or document question.
+2. Describe the purpose, output format and acceptance conditions. Enter one condition per line, up to 12 conditions of 500 characters each.
+3. Choose an execution mode and models, then start the task. Material preparation does not call a model.
+4. Review the result, check numbers and evidence, and export the deliverable.
 
-Choose the models and a route, enter your question, and click “开始互审” (**Start review**). The three-round and five-round buttons fill in common routes; you can also type your own. The numbers refer to the model slots above:
+The three material workflows default to one model execution. Independent checking and the existing review routes remain available.
 
-| Route | What happens |
+| Mode | Process |
 | --- | --- |
-| `1-2-1` | Model 1 drafts, model 2 reviews, model 1 revises |
-| `1-2-3-2-1` | Model 1 drafts, models 2, 3, and 2 review in turn, model 1 revises |
+| Single execution | Model 1 completes the task; tools and the user check the result |
+| Independent check | Model 1 drafts; model 2 receives the original task and materials without the draft; model 1 compares both results |
+| Review the draft | Models inspect the draft along a custom 3–9 turn route beginning and ending with model 1 |
 
-A route can have 3–9 rounds and must begin and end with model 1. The third model is enabled when the route uses it. Each task starts new model conversations and returns to those conversations in later rounds. Your existing chats remain available.
+Models can make the same mistake. Generated results and completed manual checks have separate states. Matching citation IDs, checked sources and model agreement never automatically approve a conclusion.
 
-Keep the workbench and task pages open while a task runs. Once the final answer is saved on the right, the task pages close automatically. Expand “每轮回答与手动处理” (**Round answers and manual handling**) to see the draft, reviews, and full revision. Opening the desktop shortcut again brings you back to the existing workbench.
-
-Results open in “阅读” (**Reading**) view, with headings, tables, lists, and code blocks. Choose “原文” (**Raw text**) to see the collected Markdown. “复制结果” (**Copy result**) copies that text; code blocks have their own copy button.
-
-Relay uses whichever model and mode each website currently has selected. Start with a short question when trying a new setup.
-
-## Three new workflows
-
-Use the tabs at the top of the workbench for **Data analysis**, **Research report**, or **Document Q&A**. Prepare the material, choose models and a review route below, then start the review. File processing, charts, and document search run locally. Preparing a task does not call a model.
+## Material workflows
 
 ### Data analysis
 
-Import CSV, TSV, or XLSX with column names in the first row. Excel workbooks support sheet selection. The panel counts rows, columns, missing cells, and duplicates, and calculates totals, means, medians, ranges, and sample standard deviations for numeric columns. Mixed columns remain text; missing values are not replaced with zero. Formula cells use existing cached values and are not recalculated.
+Import CSV, TSV or XLSX, with the first row as headers. Select Excel worksheets. Local statistics cover every row of the current table: missing values, duplicates, sums, means, medians, ranges and sample standard deviations. Mixed text and unsafe integer columns remain text; missing values are not replaced with zero. Excel formulas use cached values and are not recalculated.
 
-Trimming spaces, removing empty rows, and removing duplicates are explicit actions; the imported data can be restored. Charts respond to group, metric, and aggregation choices. Download an Excel report with data, column statistics, and all groups, or download CSV, an SVG chart, and the statistics note separately.
+Explicit cleaning can trim whitespace, remove empty or duplicate rows, or restore the imported table. Grouped charts support sums, means and counts. Download XLSX reports, CSV, SVG charts and statistical notes. Models receive statistics, up to 100 grouped values and the first 15 sample rows.
 
-Model preparation includes full-table statistics, up to 100 groups, and at most 15 sample rows. The model can interpret results and review assumptions; other metrics still need calculation. Limits: 5,000 data rows and 100 columns per sheet, 20 sheets and 100,000 cells per workbook, and 10 MB per file.
+A frozen local metric ledger checks the structured numbers that a model lists in its result. Incorrect or unknown metrics are flagged. **Only numbers in the designated checking block are compared.** Narrative numbers, the suitability of the calculation and causal explanations remain outside this check. Missing blocks are shown as unverified. Imported historical ledgers are not treated as freshly computed data.
 
-### Research report
+Limits: 5,000 rows and 100 columns per sheet, 20 sheets and 100,000 cells per workbook, 10 MB per file.
 
-Enter a research question, open a search page to choose sources, and read public HTTPS pages by URL. Existing documents or pasted text can be used too. Reading a page requests access to that origin and stores its text, URL, and retrieval time. It omits login cookies and blocks redirects. Dynamic, private, or restricted pages may need pasted text. Sources start unverified and can be marked after you check them.
+### Research reports
 
-Select materials and prepare a report. The supplied paragraphs get IDs such as [S1:P2] for model citations. The report prompt asks for scope, findings, disagreements, limitations, and recommendations. Long documents share a text budget, with partial coverage stated explicitly. After completion, citations open the actual supplied excerpts; unknown IDs are flagged. Matching an ID establishes that the paragraph exists, not that it supports the claim.
+Choose public HTTPS pages, import files or paste text. Fetching from the local workspace is subject to website cross-origin restrictions; the extension workspace requests host permission. Both omit login cookies and reject redirects. Paste text for dynamic or restricted pages. Sources are checked by the user.
 
-### Document organization and Q&A
+The task records the selected documents and the exact excerpts supplied to the model. Long documents provide partial text, with the scope stated. Reports can describe findings, disagreements, limitations and recommendations. This workflow uses selected materials; it does not automatically research the entire web.
 
-Import TXT, Markdown, DOCX, or text-based PDF, or paste text. Edit titles, categories, contents, and source URLs. Word body text and tables are extracted; PDFs preserve page locators but scanned images need OCR elsewhere. Limits: 10 MB and 200,000 characters per document, 200 PDF pages, and 50 documents totaling one million characters.
+Citation IDs such as [S1:P2] open saved excerpts. Each cited statement has a separate supported, contradicted or uncertain decision and an optional note. Reusing one excerpt for different statements requires separate checks. Unknown IDs cannot be marked supported. Changing a statement or its evidence invalidates the previous judgment.
 
-Q&A uses local Chinese and English keyword retrieval to select up to eight relevant paragraphs. Remove irrelevant matches before preparing the question. A missing match requests more evidence. Organization mode prepares a classified index and summary. Vector retrieval is not part of this version.
+### Document organization and questions
 
-Existing Markdown, Word, and PDF exports work with these results. Exports append cited paragraph snapshots and flag IDs that were not supplied. Saved tasks retain their original excerpts after source edits or deletion.
+Import TXT, Markdown, DOCX body text and tables, or text-layer PDFs; pasted text also works. Edit titles, categories, text and source links. PDF pages retain locators; scanned images are not recognized.
 
-The current browser stores the table and collection. Workflow backups include both data and text, exclude API keys, and never start model tasks when restored. Clear workflow materials separately from saved review history. See the [trial guide](三项流程试用指南.md) and the included [sample materials](示例资料).
+Questions use local Chinese and English keyword retrieval, supplying up to eight selected excerpts. Organization prepares a category index and summaries. The UI and exports state the actual document, paragraph and supplied-text scope. **Failure to retrieve evidence does not establish that no evidence exists.**
 
-## Task management and results
+Limits: 10 MB and 200,000 characters per document, 200 PDF pages, 50 documents and one million characters in the collection. OCR, vector retrieval and arbitrary code execution are not implemented.
 
-### Task library and queue
+## Results and portable work packages
 
-Tasks with saved answers appear in “任务库” (**Task library**), with up to 100 records. Search questions or results, add tags, reload a question, or back up the library. Reloading restores the question and settings without sending anything; reselect historical attachments. Deleting a library record leaves the model website conversation intact.
+Export Markdown, Word or PDF with excerpts, acceptance conditions, manual decisions, retrieval scope and execution limits. The task library includes started tasks that have not yet received an answer, retains up to 100 records, and supports search, tags and export. Loading a question never sends it. Original attachments must be selected again.
 
-“把当前问题加入队列” (**Add current question to queue**) keeps the question, attachments, model choices, route, and review roles as they are when added. In “批量队列” (**Batch queue**), separate questions with a blank line; a question may contain several lines of material. Run the queue to process them in order. A paused item holds later items. Reopening the workbench leaves the queue stopped until you choose to continue.
+A complete work package contains tasks, queued items, document text and tables for restoration in another browser. The whole input is validated before replacement. If a cross-store restore is interrupted, the next owning workbench rolls back to the records before restoration. Importing never starts model calls or the queue. Attachment jobs wait for files to be selected again; missing API connections require configuration.
 
-### Review roles, comparison, and exports
+Packages exclude configured API keys, live sessions and original attachment files, but may contain private document text. Download and store them carefully. Runtime records are written automatically to the installation’s `data` folder independently of the browser profile. Downloaded packages provide a separate backup for moving computers. Website models still need the extension and fresh logins.
 
-Expand “每轮审核分工” (**Review roles by round**) to choose a general, fact, logic, style, or opposing reviewer for each intermediate round. The chosen focus becomes part of that round’s prompt.
+Use “Migrate old browser records” in the delivery settings to replace the local materials and task library with records from the selected browser profile. Back up the current workspace first. Browser originals remain intact; keys and original attachments are not transferred, and migration never starts tasks.
 
-“结果对比与核查” (**Comparison and checks**) shows changes between the draft and final answer. Large texts appear side by side. Candidate issues come from review lines containing severity or uncertainty wording; the list may miss issues and does not infer which ones the final answer resolved. Check them off yourself after reading. Source links come from model answers and remain unverified until you mark them checked.
+## Limits and recovery
 
-Download the final result as Markdown or a Word .docx. “PDF…” opens the browser print view; choose **Save as PDF**. A full review export includes the question, all rounds, and issue/source checkmarks. Optional desktop reminders notify you when a task finishes or pauses. Clicking a reminder returns to the workbench. Browser and operating system notification settings affect delivery.
+Set active-processing time, API send attempts and per-request output tokens. Limits are checked before new sends. Reaching a limit pauses the task with existing content retained; increasing the allowance requires an explicit user action. API waits also use the remaining task time. Sent requests may keep processing; these limits do not guarantee a monetary bill cap.
 
-### Optional API connections
+Truncated API output is retained and shown for manual completion. Uncertain network failures do not silently resend or switch services. Website, login, attachment and completion-marker failures have separate explanations. Repair the page, send manually or paste a complete answer. Pausing prevents subsequent transmissions but cannot recall an existing request. Reopened unfinished tasks remain paused.
 
-Under “设置与记录 → 可选 API” (**Settings and records → Optional API**), choose DeepSeek or enter a compatible service’s URL, model name, and Key. Connections use Chat Completions. The URL may be a service root, a versioned base URL, or a complete /chat/completions endpoint. Saving asks for access to that specific origin, then adds the connection to the model selectors.
+## APIs, attachments and privacy
 
-DeepSeek defaults to https://api.deepseek.com and deepseek-flash, using non-thinking text mode. Change the model name to match your service and account. Check [DeepSeek’s documentation](https://api-docs.deepseek.com/) for its current models.
+Configure the endpoint, model and key. The local core sends API requests; the directly opened extension workspace still requests host permission. DeepSeek defaults to its [official API](https://api-docs.deepseek.com/) and deepseek-flash in non-thinking text mode. Custom services must accept Chat Completions, system messages and max_tokens; incompatibility pauses the task. Provider support and billing rules apply.
 
-This first API version handles text tasks. Use website models for image or file attachments; unsupported attachments are blocked before sending. Website and API models may share a text review. Requests go directly to the configured service and are billed under its terms. An interrupted request with uncertain delivery stays paused for manual handling and is not automatically retried.
+Local keys default to the current core process session. Optional persistent keys are encrypted for the current Windows account. Session keys must be entered again after the core exits. The directly opened extension workspace retains its browser-session or unencrypted persistent storage behavior. Clear saved keys removes both stores; backups exclude configured keys.
 
-Keys live in browser session storage by default. If you choose persistent storage, the Key stays in this browser’s local storage without additional encryption. Task exports and library backups exclude Keys. Enter them again on another computer. Website reviews remain available without an API Key.
+APIs support text tasks. Use website models for file attachments: up to 10 files, 20 MB each and 50 MB total. Files are kept locally before sending, then uploaded once per participating conversation. Supported formats depend on the website model.
 
-### Images and files
+## Current boundaries
 
-Click “添加附件” (**Add attachments**), drag files into the attachment area, or paste a screenshot into the question field. You can add up to 10 files: 20 MB per file and 50 MB in total. Supported file formats depend on the model website.
+The Windows core provides the workspace entry, disk persistence and API request journal on a random loopback-only port. Requests require a random connection credential; cross-site writes are rejected. Its data folder is restricted to the current Windows account, SYSTEM and administrators. The paired extension can operate only task tabs created through this connection, not arbitrary browser tabs.
 
-Selected files are stored locally until you start the task. Each participating model conversation receives the files once. For example, `1-2-1-3-1` uploads to models 1, 2, and 3 once each; later rounds reuse the files in those conversations.
+Materials, history and API execution remain available when the extension is disabled. Website models show a connection error. API request IDs are recorded before dispatch, completed responses can be recovered, and uncertain sends are never automatically repeated. Task scheduling still requires the workspace page to stay open; closing it does not run the remaining workflow in the background. Website changes, expired logins and provider failures still need repair.
 
-### If a task gets stuck
+The code reads no cookies and contains no telemetry, remote code or facility for executing commands found in documents. Source text and model responses do not grant tool permissions. Separate API system instructions clarify this boundary without guaranteeing resistance to every malicious text instruction.
 
-The workbench distinguishes login, page connection, attachment, and end-marker problems, and suggests what to do next. “查看当前网页” (**Open task page**) opens the model page that needs attention. You can then:
-
-- Fix the task page and click “继续当前步骤” (**Continue current step**).
-- Click “手动处理本轮” (**Handle this round manually**), send the message on the model website, then return and click “已手动发送，继续收取” (**Sent manually; collect the answer**).
-- Paste the complete answer into the manual answer field and click “保存回答并继续” (**Save answer and continue**).
-
-When Relay cannot confirm that a message was sent, it pauses rather than sending it again. “暂停” (**Pause**) stops further handoffs. Requests already sent to a website may continue generating.
-
-Completion depends on the model including the requested end marker. If the response is visibly finished but Relay keeps waiting, pause the task and paste the complete answer into the manual answer field.
-
-Reopening the workbench restores its local records. An unfinished task stays paused until you continue it. “新问题” (**New question**) keeps the previous result visible until the next task starts.
-
-## Save records or move to another computer
-
-Questions, prompts, round answers, and panel sizes are saved in the current browser. Under “设置与记录” (**Settings and records**), use “导出记录” or “导入记录” to export or import a JSON file.
-
-The JSON includes attachment metadata, but not the original files. Keep those files separately and select them again on the new computer. You also need to sign into the model websites again.
-
-“清空本地记录” (**Clear local records**) removes the extension's task records and cached attachments. Export anything you want to keep first.
-
-## Scope and checks
-
-The browser extension operates the model pages. The Windows launcher helps with installation and opening the workbench.
-
-The extension requests local storage, clipboard access, and access to the three model websites. API origins, research-source origins, and desktop notifications require separate optional permission when enabled. It does not read cookies and has no telemetry or remotely loaded code. Website mode sends through the model pages; API mode calls your configured endpoint directly.
-
-Answer collection checks the round's end marker, generation state, and a period of stable output. The answer collector does not support model websites’ deep-research or agent tool modes, or the Kimi desktop app. Workbench research reports use the supplied source excerpts.
-
-This version passed 114 regression tests and 119 independent Chrome checks. All three workflows ran with local files and a simulated compatible API. Source-page and permission responses were mocked; live APIs still need validation with a real Key.
-
-Version 0.6.0 passed 103 local tests and 49 independent Chrome feature/boundary checks, including two five-round queue tasks against a local simulated API. Live provider APIs have not been tested with a real Key. Notification delivery was mocked in the checks; actual display depends on browser and system settings. Website testing from 0.5.2 is recorded below. On this computer in Chrome, both a three-round text-only task and a five-round `1-2-1-2-1` task with an image and a text file completed using DeepSeek and ChatGPT. Later rounds reused attachments in the original conversations, and the final checks were correct. Kimi was not rechecked in this round; other accounts and modes still need their own checks. See the [validation log](验证记录.md) and [change log](更新记录.md), both in Chinese.
-
-## Development
-
-Use Node 22 or later. From the repository directory:
-
-```sh
-npm ci --ignore-scripts
-npm test
-node tools-check.cjs
-```
-
-To rebuild the launcher and icons, then create the Windows archive:
-
-```sh
-npm run build
-npm run package
-```
-
-The launcher build uses the system .NET Framework C# compiler. Archives and checksums are written to `dist/`. The extension bundles the files it needs locally and does not load remote scripts.
-
-`node preview-server.cjs` serves the interface preview at `http://127.0.0.1:8766`. `node tools-browser-check.cjs` serves the browser storage and file transfer checks at `http://127.0.0.1:8767`. Neither sends questions to models.
-
-| Files | Purpose |
-| --- | --- |
-| `extension/workspace.js`, `workspace-data.js`, `workspace.css` | Task library, queue, comparison, and checks |
-| `extension/api.js`, `exports.js`, `print.*` | Optional API, Word export, and PDF print view |
-| `extension/workflows*.js`, `workflow-parser.js` | Data analysis, material storage, retrieval, and citations |
-| `extension/app.*`, `app-polish.css` | Workbench interface and local records |
-| `extension/engine.js`, `issues.js` | Multi-round task flow and stall guidance |
-| `extension/markdown-source.js`, `markdown.js` | Answer formatting and result reading view |
-| `extension/core.js` | Prompts, result parsing, and data import |
-| `extension/adapters.js`, `content.js` | Model page detection and interaction |
-| `extension/files.js`, `upload.js` | Attachment storage and upload |
-| `extension/background.js` | Workbench entry point |
-| `launcher/Launcher.cs` | Windows launcher |
-
-Keep the `key` in `manifest.json`. Changing it changes the extension ID and breaks the connection to existing shortcuts and local data. After changing page adapters, reload the extension and refresh its model task pages.
-
-## Recent changes
-
-**0.7.0**: Added data analysis, research reports, and document organization/Q&A: local statistics and charts, Excel reports, page-text retrieval, Word/PDF sources, keyword search, and paragraph citations in exports.
-
-**0.6.1**: Removed an unsupported IPv6 CSP source that Chrome reported as a warning. Local HTTP API connections use localhost or 127.0.0.1.
-
-
-**0.6.0**: Added a searchable task library with tags, a batch queue, per-round review roles, draft comparison, candidate issues and source links. Added Markdown/Word exports, PDF printing, optional API connections, and desktop reminders.
-
-
-**0.5.2**: Added guidance for stalled tasks and a reading view. Preserved tables, headings, and code during answer collection, while removing extra layout whitespace. Fixed confirmation when ChatGPT renames uploaded files and strengthened chunk receipt instructions. Moved installer packages to Releases.
-
-**0.5.1**: Updated model menus, route shortcuts, progress indicators, and interface text. Fixed answer collection for ChatGPT's new page layout. Added Chinese and English READMEs with links to switch between them.
-
-**0.5.0**: Added images and files, restored attachment lists after reopening, and avoided repeat uploads within a model conversation. Reopening the desktop shortcut reuses the existing workbench.
-
-Earlier changes are listed in the [change log](更新记录.md).
+See [validation records](验证记录.md) for exact test scope. Transport and file checks do not establish improved real-world output quality. Compare review modes with the same materials, tools and acceptance conditions, including manual checking time and total cost. The package includes [fictional samples](示例资料) and a [workflow guide](三项流程试用指南.md).

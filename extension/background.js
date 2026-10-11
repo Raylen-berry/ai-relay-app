@@ -1,3 +1,4 @@
+importScripts('native-bridge.js');
 'use strict';
 // The long-running flow belongs to the visible app, not an ephemeral MV3 worker.
 chrome.storage.local.setAccessLevel({accessLevel: 'TRUSTED_CONTEXTS'}).catch(console.error);

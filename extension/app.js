@@ -2,7 +2,7 @@
 const C = RelayCore;
 const $ = id => document.getElementById(id);
 const isExtension = !!globalThis.chrome?.runtime?.id && !!chrome.storage;
-const defaultConfig = () => ({q: '', attachments:[], primary: 'deepseek', reviewer: 'chatgpt', third:'kimi', sequence:'1-2-1', timeout: 15, templates: {...C.templates}});
+const defaultConfig = () => ({q: '', attachments:[], primary: 'deepseek', reviewer: 'chatgpt', third:'kimi', sequence:'1', timeout: 15, templates: {...C.templates}});
 let config = defaultConfig();
 let imported = null;
 // Disable writes until this window owns the runner, including during startup.
@@ -14,6 +14,7 @@ let engine;
 let taskWindow;
 let extras;
 let workflows;
+let delivery;
 let saveChain = Promise.resolve();
 let saveTimer;
 let transient = null;
@@ -22,6 +23,7 @@ let outputMode = 'preview';
 let renderedResult = null;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 function readForm() {
+  delivery?.read();
   config = {...config, q: $('question').value, attachments:config.attachments || [], primary: $('primary').value, reviewer: $('reviewer').value,
     third:$('third').value, sequence:$('sequence').value,
     timeout: Number($('timeout').value), templates: {first: $('templateFirst').value, review: $('templateReview').value, final: $('templateFinal').value}};
@@ -32,6 +34,7 @@ function populateForm() {
   if (![...$('timeout').options].some(o => o.value === String(config.timeout))) config.timeout = 15;
   $('timeout').value = config.timeout;
   $('templateFirst').value = config.templates.first; $('templateReview').value = config.templates.review; $('templateFinal').value = config.templates.final;
+  delivery?.populate();
 }
 function store() {
   if (isExtension && lockedElsewhere) return Promise.resolve();
@@ -71,7 +74,7 @@ function renderTiming(r) {
     body.append(tr);
   };
   add('打开与检查网页',t.setup);
-  r.route.forEach((role,i) => add(`${i+1} · ${C.providers[r[role]].name} · ${i===0?'初稿':i===r.route.length-1?'定稿':'审核'}`,t.rounds[i]));
+  r.route.forEach((role,i) => add(`${i+1} · ${C.providers[r[role]].name} · ${r.route.length===1?'生成成果':i===0?'初稿':i===r.route.length-1?'定稿':'审核'}`,t.rounds[i]));
 }
 function render() {
   const r = engine?.run;
@@ -82,6 +85,9 @@ function render() {
   let usesThird = false;
   try {usesThird = C.routeFor(config).includes('third');} catch {}
   $('third').disabled = $('sequence').disabled || !usesThird;
+  $('reviewer').disabled = $('sequence').disabled || config.sequence.replace(/\s/g,'')==='1';
+  $('reviewer').parentElement.classList.toggle('unused',config.sequence.replace(/\s/g,'')==='1');
+  $('sequenceHint').textContent=config.sequence.replace(/\s/g,'')==='1'?'当前单次任务只使用模型 1':'可自定义 3–9 轮互审，首尾都用模型 1';
   $('thirdField').classList.toggle('unused', !usesThird);
   $('thirdHint').textContent = usesThird ? '已参与' : '未参与';
   for (const id of ['routeSimple','routeExtended']) {
@@ -99,7 +105,7 @@ function render() {
   $('questionHint').hidden = !running && !paused;
   $('questionHint').textContent = running ? '正在处理当前问题。换题前请先暂停，再点“新问题”。' : '已暂停。“继续当前步骤”会接着处理原来的问题；换题请点“新问题”。';
   $('start').disabled = running || !isExtension || lockedElsewhere || engine?.locked || addingFiles;
-  $('start').textContent = r ? '开始新互审' : '开始互审';
+  $('start').textContent = r ? '开始新任务' : '开始任务';
   $('pause').disabled = !running || lockedElsewhere;
   $('resume').disabled = !paused || engine?.locked || lockedElsewhere;
   $('takeover').disabled = !r || r.status === 'done' || engine?.locked || lockedElsewhere;
@@ -116,9 +122,10 @@ function render() {
   $('lastOut').value = output.final || '';
   $('finalOut').value = r?.finalOut || imported?.finalOut || '';
   renderResult();
-  $('resultLabel').textContent = r?.status === 'done' ? '已完成' : running ? '处理中' : paused ? '等待继续' : imported?.previous ? '上次结果' : imported ? '已导入' : '等待开始';
-  const states = {running: '进行中', paused: '已暂停', done: '已完成'};
-  $('status').textContent = r ? states[r.status] + ' · ' + (r.status === 'done' ? '最终结果已保存' : `第 ${r.stageIndex + 1}/${r.route.length} 轮 · ${C.providers[r[r.route[r.stageIndex]]].name} · ${C.labels[C.stageAt(r)]}`) : '就绪 · 输入问题后，点击「开始互审」';
+  $('resultLabel').textContent = r?.status === 'done' ? (globalThis.RelayDeliveryData?.assessment(r).label||'已生成') : running ? '处理中' : paused ? '等待继续' : imported?.previous ? '上次结果' : imported ? '已导入' : '等待开始';
+  delivery?.render();
+  const states = {running: '进行中', paused: '已暂停', done: '已生成'};
+  $('status').textContent = r ? states[r.status] + ' · ' + (r.status === 'done' ? '成果已保存，请查看核对状态' : `第 ${r.stageIndex + 1}/${r.route.length} 轮 · ${C.providers[r[r.route[r.stageIndex]]].name} · ${r.route.length===1?'生成成果':r.delivery?.reviewMode==='independent'&&C.stageAt(r)==='review'?'独立核查':C.labels[C.stageAt(r)]}`) : '就绪 · 输入问题后，点击「开始任务」';
   if (r?.pending?.parts?.length > 1 && r.status !== 'done') $('status').textContent += ` · 材料 ${r.pending.partIndex + 1}/${r.pending.parts.length}`;
   $('error').textContent = r?.error || '';
   $('error').hidden = !r?.error;
@@ -281,6 +288,13 @@ async function initialize() {
     workflows=RelayWorkflows.init({extension:isExtension,writable:()=>!lockedElsewhere,busy:()=>engine?.locked||engine?.run?.status==='running'||extras?.queueRunning(),config:()=>config,run:()=>engine?.run,result:()=>engine?.run?.finalOut||imported?.finalOut||'',message,readForm,store,cancelActive:async()=>{await extras?.changed();await extras?.cancelActive();},setConfig:value=>{clearTimeout(saveTimer);engine.run=null;imported=null;taskWindow=null;config=value;populateForm();render();}});
     await workflows.load().catch(e=>message('流程资料暂未读取：'+e.message,true));
   }
+  if(globalThis.RelayDelivery)delivery=RelayDelivery.init({extension:isExtension,writable:()=>!lockedElsewhere,busy:()=>engine?.locked||engine?.run?.status==='running'||extras?.queueRunning(),config:()=>config,run:()=>engine?.run,store,message,render,populate:populateForm,changed:async()=>extras?.changed(),workspace:()=>extras.state(),materials:()=>workflows.state(),validateMaterials:value=>workflows.validateState(value),restore:async({materials,tasks,queue})=>{
+    await store();await extras.changed();
+    const oldRelay=isExtension?(await chrome.storage.local.get('relay')).relay:JSON.parse(localStorage.getItem('aiRelayPreview')||'null');
+    await RelayWorkflowStore.put('deliveryRestoreJournal',{materials:workflows.state(),workspace:extras.state(),relay:oldRelay});
+    try{await workflows.replaceMaterials(materials);await extras.replaceTasks(tasks,queue);engine.run=null;imported=null;config=defaultConfig();populateForm();await store();await RelayWorkflowStore.remove('deliveryRestoreJournal');}
+    catch(error){await recoverRestoreJournal();await extras.load();await workflows.load();await loadSaved();populateForm();render();throw Error('恢复未完成，已还原原有记录：'+error.message);}
+  }});
   let savedLayout;
   try {savedLayout=isExtension ? (await chrome.storage.local.get('relayLayout')).relayLayout : JSON.parse(localStorage.getItem('aiRelayLayout'));} catch {}
   layout=RelayLayout.init(savedLayout, value => {
@@ -289,7 +303,8 @@ async function initialize() {
   });
   populateForm(); render();
   $('previewNotice').hidden = isExtension;
-  $('modeBadge').textContent = isExtension ? '自动保存' : '界面预览';
+  $('modeBadge').textContent = globalThis.RelayNative ? '本机保存' : isExtension ? '自动保存' : '界面预览';
+  if(globalThis.RelayNative){document.querySelectorAll('.tiny:not(:has(*))').forEach(n=>{n.textContent=n.textContent.replace('保存在此浏览器，最多保留 100 个有回答的任务','保存在本机，最多保留 100 个已开始的任务').replace('默认只在本次浏览器会话保存 Key。长期保存使用本机浏览器存储，没有额外加密','默认只在本次本机核心会话保存 Key。长期保存使用 Windows 当前账户加密').replace('记录保存在当前浏览器','记录保存在本机应用的数据目录');});const label=$('apiRemember').parentElement;label.lastChild.textContent='在本机加密保存 Key';}
   bind('chooseFiles',()=> $('filePicker').click());
   $('filePicker').addEventListener('change',async ev=>{await addFiles([...ev.target.files]);ev.target.value='';});
   const drop=$('fileDrop');
@@ -427,14 +442,22 @@ async function initialize() {
     // if an actual lock wait persists; queued acquisition remains automatic.
     ownerNoticeTimer=setTimeout(()=>{checkingOwner=false;render();},1800);
     // Queue for ownership: when an older window closes this one must recover.
-    navigator.locks.request('ai-relay-runner', async () => {
+    (async()=>{if(globalThis.RelayNative)await RelayNative.acquire();return navigator.locks.request('ai-relay-runner', async () => {
       // Re-read after acquisition, never resume using a stale waiting-window copy.
-      await extras?.load(); await loadSaved(); await workflows?.load().catch(e=>message('流程资料暂未读取：'+e.message,true)); lockedElsewhere = false; checkingOwner=false;clearTimeout(ownerNoticeTimer);transient = null;
+      await recoverRestoreJournal();await extras?.load(); await loadSaved(); await workflows?.load().catch(e=>message('流程资料暂未读取：'+e.message,true)); lockedElsewhere = false; checkingOwner=false;clearTimeout(ownerNoticeTimer);transient = null;
       await pruneFiles().catch(e=>message('附件缓存整理未完成：'+e.message,true));
       populateForm(); render(); extras?.renderAPI();await extras?.changed();
       setInterval(async () => {try {await extras?.pump();await engine.tick(); render();} catch(e) {message(e.message, true);}}, 1500);
       await new Promise(() => {});
-    }).catch(e => message('无法连接工作台：' + e.message + '。请关闭其他工作台后重新打开。', true));
+    });})().catch(e => {console.error(e.stack);message('无法连接工作台：' + e.message + '。请关闭其他工作台后重新打开。', true);});
   }
+}
+async function recoverRestoreJournal() {
+  if(!globalThis.RelayWorkflowStore)return;
+  const journal=await RelayWorkflowStore.get('deliveryRestoreJournal');if(!journal)return;
+  if(isExtension)await chrome.storage.local.set({relay:journal.relay||null,relayWorkspace:journal.workspace});
+  else {localStorage.setItem('aiRelayPreview',JSON.stringify(journal.relay||null));localStorage.setItem('relayWorkspace',JSON.stringify(journal.workspace));}
+  await RelayWorkflowStore.put('workspace',journal.materials);
+  await RelayWorkflowStore.remove('deliveryRestoreJournal');
 }
 initialize().catch(e => message('初始化失败：' + e.message, true));

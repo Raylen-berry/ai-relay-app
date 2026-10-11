@@ -2,7 +2,7 @@
   'use strict';
   const D=root.RelayWorkspaceData,C=root.RelayCore,A=root.RelayAPI,$=id=>document.getElementById(id);
   const clone=v=>structuredClone(v),empty=()=>({version:1,history:[],queue:[],queueEnabled:false,activeJobId:null,apiProfiles:[],apiThreads:{},notifications:false});
-  const labels={waiting:'等待',running:'处理中',paused:'已暂停',done:'已完成',cancelled:'已取消',blocked:'需重新选择附件'};
+  const labels={waiting:'等待',running:'处理中',paused:'已暂停',done:'已生成',cancelled:'已取消',blocked:'需重新选择附件'};
   function node(tag,text,className){const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(className)e.className=className;return e;}
   function init(ctx){
     let state=empty(),chain=Promise.resolve(),selected=null,editing=null,lastData='',lastRoles='',lastLists='',lastHistory='',lastRun='',pumping=false;
@@ -36,8 +36,8 @@
     function bounded(){while(state.history.length>100||JSON.stringify(state).length>7500000&&state.history.length>1)state.history.shift();}
     async function changed(){
       if(!writable())return;const r=ctx.run();if(!r)return;
-      const signature=r.id+'|'+r.status+'|'+r.turns?.length+'|'+r.finalOut?.length;if(signature===lastRun)return;lastRun=signature;
-      if((r.turns?.length||r.status==='done')&&!state.deletedIds?.includes(r.id)){const rec=await ensureRecord();Object.assign(rec,D.snapshot(r,C.providers));bounded();}
+      const signature=r.id+'|'+r.status+'|'+r.turns?.length+'|'+r.finalOut?.length+'|'+JSON.stringify(r.delivery||{});if(signature===lastRun)return;lastRun=signature;
+      if(!state.deletedIds?.includes(r.id)){const rec=await ensureRecord();Object.assign(rec,D.snapshot(r,C.providers));bounded();}
       const job=state.queue.find(j=>j.id===state.activeJobId);if(job){if(!job.runId)job.runId=r.id;if(job.runId===r.id){job.status=r.status;job.error=r.error||'';if(r.status==='done')state.activeJobId=null;}}
       if(r.status==='done')for(const tab of Object.values(r.tabs||{}))if(transport.is(tab.id))delete state.apiThreads[tab.id];
       await save();render();await notify(r);
@@ -48,7 +48,7 @@
       if(!await chrome.permissions.contains({permissions:['notifications']}))return;
       if(!chrome.notifications?.create)return;
       state.notificationKeys=[...(state.notificationKeys||[]),key].slice(-200);await save();
-      await chrome.notifications.create('relay-'+r.id,{type:'basic',iconUrl:'icon-128.png',title:r.status==='done'?'互审已完成':'互审需要你处理',message:r.status==='done'?'结果已保存在工作台。':(r.issue?.title||'任务已暂停，请回工作台查看。')}).catch(()=>{});
+      await chrome.notifications.create('relay-'+r.id,{type:'basic',iconUrl:'icon-128.png',title:r.status==='done'?'成果已生成':'任务需要你处理',message:r.status==='done'?(root.RelayDeliveryData?.assessment(r).label||'结果已保存在工作台。'):(r.issue?.title||'任务已暂停，请回工作台查看。')}).catch(()=>{});
     }
     function renderRoles(){
       const cfg=ctx.config(),disabled=!writable()||ctx.busy(),sig=[cfg.sequence,cfg.primary,cfg.reviewer,cfg.third,JSON.stringify(cfg.reviewRoles||{}),disabled].join('|');if(sig===lastRoles)return;lastRoles=sig;const target=$('reviewRoleFields');target.replaceChildren();
@@ -67,7 +67,7 @@
       for(const id of ['exportMarkdown','exportWord','exportPDF','exportReview'])$(id).disabled=id==='exportReview'?!rec?.turns?.length:!rec?.finalOut;
     }
     function resultDocument(rec,full=false){
-      const appendix=root.RelayWorkflowData?.citationAppendix(rec.finalOut,rec.workflow)||'';
+      const appendix=(root.RelayWorkflowData?.citationAppendix(rec.finalOut,rec.workflow)||'')+(root.RelayDeliveryData?.appendix(rec)||'');
       if(!full)return (rec.finalOut||'')+appendix;
       const issues=D.issues(rec.turns).map(x=>`- [${rec.resolved?.includes(x.id)?'x':' '}] 第 ${x.round} 轮：${x.text}`).join('\n');
       const refs=D.sources(rec.turns,rec.names).map(x=>`- [${rec.verified?.includes(x.url)?'x':' '}] ${x.url}（第 ${x.rounds.join('、')} 轮；${rec.verified?.includes(x.url)?'已标记核验':'尚未核验'}）`).join('\n');
@@ -80,6 +80,7 @@
       if(!records.length)list.append(node('li','没有匹配的任务。','empty-state'));
       for(const r of records){const li=node('li'),button=node('button',(r.workflow?.title||r.q).slice(0,70)+((r.workflow?.title||r.q).length>70?'…':''),'task-title'+(r.id===selected?' active':''));button.onclick=()=>{selected=r.id;lastHistory='';renderHistory(true);};li.append(button,node('span',new Date(r.created).toLocaleString()+' · '+(labels[r.status]||r.status),'task-meta'));if(r.tags?.length)li.append(node('span',r.tags.join(' · '),'task-meta'));list.append(li);}
       const detail=$('historyDetail');detail.replaceChildren();const rec=state.history.find(x=>x.id===selected);if(!rec){detail.append(node('p','选择一个任务查看。','empty-state'));return;}
+      if(rec.delivery)detail.append(node('p',root.RelayDeliveryData.assessment(rec).label+' · '+root.RelayDeliveryData.scopeText(rec.workflow),'tiny'));
       detail.append(node('h3',(rec.workflow?.title||rec.q).slice(0,200)),node('p',(rec.names||[]).join(' → '),'tiny'));
       const input=node('input');input.placeholder='标签，用逗号分隔';input.value=(rec.tags||[]).join('，');input.disabled=!writable();input.setAttribute('aria-label','任务标签');input.onchange=async()=>{rec.tags=D.tags(input.value);await save();lastHistory='';renderHistory(true);};detail.append(input);
       const actions=node('div',undefined,'task-actions');for(const [text,fn,disabled] of [
@@ -145,7 +146,7 @@
         for(const job of jobs)if(!state.queue.some(x=>x.id===job.id))state.queue.push(job);
         state.queue=state.queue.slice(0,50);state.queueEnabled=false;bounded();await save();renderProviders();ctx.populate();renderAPI();render();ctx.message('任务库已恢复。API Key 与附件请在本机重新配置；队列尚未启动。');
       }finally{ev.target.value='';}});
-    return {load,io,render,renderAPI,changed,pump,preflight,validate,cancelActive,queueRunning:()=>state.queueEnabled||pumping,async clear(){state.history=[];state.queue=[];state.activeJobId=null;state.queueEnabled=false;state.apiThreads={};for(const k of Object.keys(transportBacking))delete transportBacking[k];state.apiThreads=transportBacking;await save();lastRun=lastData=lastHistory=lastLists='';render();},attachmentIds:()=>state.queue.filter(j=>!['done','cancelled'].includes(j.status)).flatMap(j=>(j.config.attachments||[]).map(f=>f.id)),state:()=>clone(state)};
+    return {load,io,render,renderAPI,changed,pump,preflight,validate,cancelActive,queueRunning:()=>state.queueEnabled||pumping,async clear(){state.history=[];state.queue=[];state.activeJobId=null;state.queueEnabled=false;state.apiThreads={};for(const k of Object.keys(transportBacking))delete transportBacking[k];state.apiThreads=transportBacking;await save();lastRun=lastData=lastHistory=lastLists='';render();},attachmentIds:()=>state.queue.filter(j=>!['done','cancelled'].includes(j.status)).flatMap(j=>(j.config.attachments||[]).map(f=>f.id)),async replaceTasks(tasks,queue=[]){state.history=tasks.map(root.RelayDeliveryData.safeTask);state.queue=queue.map(root.RelayDeliveryData.safeJob);state.queueEnabled=false;state.activeJobId=null;state.deletedIds=[];lastRun=lastData=lastHistory=lastLists='';await save();render();},state:()=>clone(state)};
   }
   root.RelayWorkspace={init};
 })(globalThis);

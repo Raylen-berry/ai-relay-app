@@ -1,0 +1,19 @@
+<section class="delivery-card" aria-label="任务交付与验收">
+  <div class="delivery-heading"><div><h2>这次要交付什么？</h2><p>先写清用途和验收条件。生成完成后，逐项核对成果。</p></div><span id="deliveryBadge" class="delivery-status">等待成果</span></div>
+  <div class="delivery-fields">
+    <label>成果用途<input id="deliveryPurpose" maxlength="500" placeholder="例如：给团队讨论下个月的采购方案"></label>
+    <label>交付形式<input id="deliveryFormat" maxlength="200" placeholder="例如：一页结论，附统计表和待确认项"></label>
+    <label class="wide">验收条件，一行一项（最多 12 项，每项 500 字）<textarea id="deliveryRequirements" placeholder="例如：说明缺失值如何处理&#10;关键数字能对照统计表&#10;建议注明依据和适用条件"></textarea></label>
+    <label>执行方式<select id="deliveryMode"><option value="single">单次完成，随后核对</option><option value="independent">独立核查，再对照定稿</option><option value="draft">查看初稿后互审</option></select></label>
+    <p class="delivery-note">独立核查时，核查模型只收到任务和材料。不同模型仍可能同时出错，结论需要证据。</p>
+  </div>
+  <details style="margin-top:14px"><summary>运行上限与资料保存</summary><div class="delivery-fields">
+    <label>自动处理上限（分钟）<input id="deliveryMinutes" type="number" min="5" max="480" value="60"></label>
+    <label>API 发送尝试上限<input id="deliveryCalls" type="number" min="1" max="50" value="6"></label>
+    <label>单次 API 输出上限（token）<input id="deliveryTokens" type="number" min="256" max="32768" value="4096"></label>
+    <p class="delivery-note">到达上限会停止新的发送，保留已有成果。已发出的请求可能继续处理；费用以服务商账单为准。</p>
+  </div><div class="delivery-actions"><button id="deliveryBackup" class="secondary">保存完整工作包</button><label class="file-button">恢复工作包<input id="deliveryRestore" type="file" accept=".json,application/json"></label><button id="deliveryClearKeys" class="text-btn">清除保存的 API Key</button></div><p class="delivery-note">工作包含任务、表格与资料正文，可在其他浏览器恢复。API 配置密钥和附件原文件需另行准备；工作包可能含私密资料，请妥善保存。</p></details>
+  <div id="deliveryPartialBox" class="delivery-result" hidden><h3>部分回答 · 尚未完成</h3><p class="delivery-note">API 输出达到上限。可对照以下内容补全，再通过“手动补入回答”完成本轮；软件不会自动重发。</p><textarea id="deliveryPartial" aria-label="尚未完成的部分回答" readonly></textarea></div>
+  <div id="deliveryResult" class="delivery-result" hidden><h3>成果核对</h3><div id="deliverySummary" class="delivery-state"></div><ul id="deliveryAcceptance" class="delivery-checks"></ul><h3>引用是否支持这句话？</h3><p class="delivery-note">逐条对照本次提供的原文。标记“有依据”只记录你的判断，来源已核对不会自动认可结论。</p><ul id="deliveryClaims" class="delivery-checks"></ul><button id="deliveryReport" class="secondary">下载成果与核对记录</button></div>
+  <div class="delivery-actions"><button id="deliveryExtend" class="secondary" hidden>延长 15 分钟，并增加 1 次 API 尝试</button><span id="deliverySaved" class="delivery-note" role="status"></span></div>
+</section>

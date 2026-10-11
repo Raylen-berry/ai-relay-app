@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "AI 互审 · Relay",
   "description": "多模型互审，并提供数据分析、调研报告和资料问答流程。",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "minimum_chrome_version": "114",
   "permissions": [
     "storage",
@@ -12,7 +12,8 @@
     "https://chat.deepseek.com/*",
     "https://chatgpt.com/*",
     "https://www.kimi.com/*",
-    "https://kimi.com/*"
+    "https://kimi.com/*",
+    "http://127.0.0.1/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -61,5 +62,10 @@
     "https://*/*",
     "http://localhost/*",
     "http://127.0.0.1/*"
-  ]
+  ],
+  "externally_connectable": {
+    "matches": [
+      "http://127.0.0.1/*"
+    ]
+  }
 }
