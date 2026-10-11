@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AI 互审 · 快速入门</title><link rel="icon" href="demo-assets/icon-32.png"><link rel="stylesheet" href="tutorial.css"></head>
+<body>
+<main class="tutorial-page">
+  <header class="page-heading"><div><p>AI RELAY · 使用教程</p><h1>从问题到交付</h1></div><span>基于 0.9.0 · 中文旁白</span></header>
+  <div class="tutorial-layout">
+    <div class="player">
+      <section id="lessonStage" class="lesson-stage" aria-label="教程演示画面">
+        <div class="stage-heading"><div class="stage-brand"><img src="demo-assets/brand.png" alt=""><span>AI 互审 · Relay</span></div><div class="chapter-heading"><span id="stepNumber">01 / 08</span><strong id="stepTitle">认识入口</strong></div><span class="demo-badge">演示数据</span></div>
+        <div class="demo-shell"><iframe id="demoFrame" src="demo.html" title="软件操作演示"></iframe></div>
+        <div class="caption-row"><span id="caption">任务工作台做互审，成果交付做核对与导出。</span></div>
+        <div class="stage-progress"><i id="stageProgress"></i></div>
+      </section>
+      <div class="playback"><button id="play" class="primary" type="button">播放教程</button><button id="previous" type="button" aria-label="上一章">上一章</button><button id="next" type="button" aria-label="下一章">下一章</button><button id="fullscreen" type="button">全屏</button><span id="time" aria-label="播放进度">00:00</span><label class="voice-choice"><input id="voice" type="checkbox" checked>旁白</label><label class="speed-choice">速度<select id="speed" aria-label="播放速度"><option value="1">1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option></select></label></div>
+      <label class="seek-label" for="seek">播放进度</label><input id="seek" type="range" min="0" max="132" step="0.1" value="0" aria-label="拖动播放进度">
+      <p id="playerStatus" role="status" aria-live="polite">点击播放，或选择右侧章节。</p>
+    </div>
+    <aside class="chapters"><h2>操作步骤</h2><ol id="chapterList"></ol><p>演示不会调用模型。<br>实际等待时间以模型网页为准。</p><details><summary>首次使用</summary><p>双击桌面“AI 互审”。使用网页模型时，在同一 Chrome 配置中加载扩展，并登录模型账号。已有成果可直接在“成果交付”中处理。</p></details><details><summary>任务暂停时</summary><p>先看工作台提示，处理登录或页面问题，再按提示继续或手动补入完整回答。</p></details></aside>
+  </div>
+  <footer>可暂停、跳章或调整速度。网页可离线打开，手机建议横屏观看。</footer>
+</main>
+<audio id="narration" src="narration.mp3" preload="metadata"></audio>
+<script src="lesson-data.js"></script><script src="tutorial.js"></script>
+</body></html>

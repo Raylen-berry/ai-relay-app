@@ -10,6 +10,12 @@ It works with signed-in DeepSeek, ChatGPT and Kimi websites. DeepSeek and compat
 
 Current version: **0.9.0 beta**, for Chrome and Edge on Windows.
 
+## Quick tutorial
+
+[Watch the 2:08 video](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.9.0/AI-Relay-Quick-Start.mp4) · [Download the offline web tutorial](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.9.0/AI-Relay-Web-Tutorial.zip)
+
+Follow a task from input and model review through evidence checks and export. Narration and captions are in Chinese. Extract the web tutorial and open `index.html` to pause, jump between chapters or change speed. The example uses a simulated order and skips generation delays.
+
 ## Install
 
 1. [Download the Windows package](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.9.0/AI-Relay-0.9.0-Windows.zip) and extract it completely.
