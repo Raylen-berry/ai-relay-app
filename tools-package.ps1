@@ -4,7 +4,7 @@ $relayManifest = Get-Content -LiteralPath (Join-Path $relayRoot 'extension\manif
 $relayVersion = $relayManifest.version
 $relayStage = Join-Path $relayRoot ('dist\AI-Relay-' + $relayVersion + '-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $relayStage -Force | Out-Null
-foreach ($relayItem in @('extension','AI互审启动助手.exe','AI互审本机核心.exe','extension-id.txt','Install.ps1','安装到本机.cmd','开始使用.html','换机安装.md','README.md','README.en.md','更新记录.md','验证记录.md','三项流程试用指南.md','0.8.0-交付与核对说明.md','示例资料')) {
+foreach ($relayItem in @('extension','AI互审启动助手.exe','AI互审本机核心.exe','extension-id.txt','Install.ps1','安装到本机.cmd','开始使用.html','换机安装.md','README.md','README.en.md','更新记录.md','验证记录.md','三项流程试用指南.md','0.8.0-交付与核对说明.md','成果交付使用说明.md','示例资料')) {
     Copy-Item -LiteralPath (Join-Path $relayRoot $relayItem) -Destination $relayStage -Recurse -Force
 }
 New-Item -ItemType Directory -Path (Join-Path $relayStage 'assets') | Out-Null

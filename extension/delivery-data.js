@@ -46,7 +46,7 @@
     const missingCitations = !!text && needsCitations && !items.length;
     // A matched citation, computed input statistics or a model's own verdict cannot approve a result.
     const pending = pendingClaims + pendingRequirements.length + Number(missingCitations) + Number(!d.requirements.length) + Number(math.required&&!math.present);
-    const label = !text ? '等待成果' : run?.workflow?.restored ? '来自工作包 · 核对记录待确认' : contradicted ? '发现证据问题' : pending ? '成果已生成 · 待核对' : '已完成所列人工核对';
+    const label = !text ? '等待成果' : contradicted ? '发现证据问题' : pending ? run?.workflow?.restored||run?.deliveryOrigin?.imported ? '导入副本 · 待核对' : run?.deliveryOrigin ? '成果已接收 · 待核对' : '成果已生成 · 待核对' : '已完成所列人工核对';
     return {label, items, math, pending, pendingRequirements, unknown, contradicted, missingCitations, noCriteria:!d.requirements.length};
   }
   function mathChecks(text,workflow) {
@@ -76,7 +76,7 @@
       (run.workflow?.analysisReport ? '\n\n### 本机计算摘要\n\n' + run.workflow.analysisReport : '') +
       (a.math.required ? '\n\n### 结构化数字核对\n\n'+(a.math.present?a.math.items.map(v=>'- '+v.label+'：'+(v.ok?'与本机统计一致':'不一致或指标无效')+'；回答 '+String(v.value??'无')+'；本机 '+String(v.expected??'无')).join('\n'):'回答未提供可核对的数字块。')+'\n\n只检查核对块中列出的数值，不验证全文数字、计算口径合理性或因果解释。' : '') +
       '\n\n### 引用表述核对\n\n' + (a.items.length ? a.items.map(c => quote(c.text) + '\n\n状态：' + ({supported:'用户标记有依据', contradicted:'证据不符或编号无效', uncertain:'无法确认', pending:'待核对'}[c.status]) + (c.review?.note ? '；说明：' + c.review.note : '')).join('\n\n') : '没有可识别的段落引用，引用支持程度未核对。') +
-      '\n\n### 运行范围\n\n' + `模式：${run.sequence === '1' ? '单次完成' : d.reviewMode === 'independent' ? '独立核查' : '查看初稿后互审'}；API 发送尝试 ${run.apiAttempts || 0} 次；自动处理上限 ${d.maxMinutes} 分钟；单次 API 输出上限 ${d.maxOutputTokens} token。费用取决于服务商，这些限制不等于金额保证。\n`;
+      (run.deliveryOrigin ? '\n\n### 成果来源\n\n'+(run.deliveryOrigin.label||'用户提供的正文')+(run.deliveryOrigin.kind==='relay'?'；互审任务编号 '+run.deliveryOrigin.taskId+'；顺序 '+run.deliveryOrigin.sequence:'；未在此功能中发送给模型')+(run.deliveryOrigin.imported?'。从备份导入，原有核对状态未沿用':'')+'。核对记录属于这份独立成果。\n' : '\n\n### 运行范围\n\n' + `模式：${run.sequence === '1' ? '单次完成' : d.reviewMode === 'independent' ? '独立核查' : '查看初稿后互审'}；API 发送尝试 ${run.apiAttempts || 0} 次；自动处理上限 ${d.maxMinutes} 分钟；单次 API 输出上限 ${d.maxOutputTokens} token。费用取决于服务商，这些限制不等于金额保证。\n`);
   }
   function safeTask(raw) {
     if (!raw || typeof raw !== 'object' || typeof raw.q !== 'string') throw Error('工作包中有无效任务。');
@@ -102,10 +102,10 @@
     config.delivery=settings({...config.delivery,checks:[],accepted:[]});
     return {id:job.id,created:Number(job.created)||Date.now(),config,status:['done','cancelled'].includes(job.status)?job.status:config.attachments.length?'blocked':'waiting'};
   }
-  function packageData({current, history = [], queue = [], materials}) {
+  function packageData({current, history = [], queue = [], materials,deliverables}) {
     const tasks = history.map(safeTask);
     if (current?.q && !tasks.some(t => t.id === current.id)) tasks.push(safeTask(current));
-    return {schema:'ai-relay-delivery', version:1, exported:new Date().toISOString(), materials:structuredClone(materials), tasks:tasks.slice(-100), queue:queue.slice(0,50).map(safeJob),notice:'包含任务文字、队列、资料正文和表格；不含 API 配置密钥、活动会话和附件原文件。导入不会发送任务。'};
+    return {schema:'ai-relay-delivery', version:1, exported:new Date().toISOString(), materials:structuredClone(materials), tasks:tasks.slice(-100), queue:queue.slice(0,50).map(safeJob),...(deliverables?{deliverables:root.RelayDeliverablesData.state(deliverables)}:{}),notice:'包含任务文字、队列、资料正文、表格与独立成果库；不含 API 配置密钥、活动会话和附件原文件。导入不会发送任务。'};
   }
   const api = {settings, brief, claims, mathChecks, assessment, scopeText, appendix, safeTask, safeJob, packageData};
   root.RelayDeliveryData = api;

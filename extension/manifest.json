@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "AI 互审 · Relay",
   "description": "多模型互审，并提供数据分析、调研报告和资料问答流程。",
-  "version": "0.8.2",
+  "version": "0.9.0",
   "minimum_chrome_version": "114",
   "permissions": [
     "storage",

@@ -288,13 +288,15 @@ async function initialize() {
     workflows=RelayWorkflows.init({extension:isExtension,writable:()=>!lockedElsewhere,busy:()=>engine?.locked||engine?.run?.status==='running'||extras?.queueRunning(),config:()=>config,run:()=>engine?.run,result:()=>engine?.run?.finalOut||imported?.finalOut||'',message,readForm,store,cancelActive:async()=>{await extras?.changed();await extras?.cancelActive();},setConfig:value=>{clearTimeout(saveTimer);engine.run=null;imported=null;taskWindow=null;config=value;populateForm();render();}});
     await workflows.load().catch(e=>message('流程资料暂未读取：'+e.message,true));
   }
-  if(globalThis.RelayDelivery)delivery=RelayDelivery.init({extension:isExtension,writable:()=>!lockedElsewhere,busy:()=>engine?.locked||engine?.run?.status==='running'||extras?.queueRunning(),config:()=>config,run:()=>engine?.run,store,message,render,populate:populateForm,changed:async()=>extras?.changed(),workspace:()=>extras.state(),materials:()=>workflows.state(),validateMaterials:value=>workflows.validateState(value),restore:async({materials,tasks,queue})=>{
+  if(globalThis.RelayDelivery)delivery=RelayDelivery.init({extension:isExtension,writable:()=>!lockedElsewhere,busy:()=>engine?.locked||engine?.run?.status==='running'||extras?.queueRunning(),config:()=>config,run:()=>engine?.run,store,message,render,populate:populateForm,changed:async()=>extras?.changed(),workspace:()=>extras.state(),materials:()=>workflows.state(),validateMaterials:value=>workflows.validateState(value),restore:async({materials,tasks,queue,deliverables})=>{
     await store();await extras.changed();
     const oldRelay=isExtension?(await chrome.storage.local.get('relay')).relay:JSON.parse(localStorage.getItem('aiRelayPreview')||'null');
-    await RelayWorkflowStore.put('deliveryRestoreJournal',{materials:workflows.state(),workspace:extras.state(),relay:oldRelay});
-    try{await workflows.replaceMaterials(materials);await extras.replaceTasks(tasks,queue);engine.run=null;imported=null;config=defaultConfig();populateForm();await store();await RelayWorkflowStore.remove('deliveryRestoreJournal');}
-    catch(error){await recoverRestoreJournal();await extras.load();await workflows.load();await loadSaved();populateForm();render();throw Error('恢复未完成，已还原原有记录：'+error.message);}
+    await delivery?.desk?.flush();
+    await RelayWorkflowStore.put('deliveryRestoreJournal',{materials:workflows.state(),workspace:extras.state(),relay:oldRelay,deliverables:delivery?.desk?.state()});
+    try{await workflows.replaceMaterials(materials);await extras.replaceTasks(tasks,queue);if(deliverables)await delivery.desk.replace(deliverables);engine.run=null;imported=null;config=defaultConfig();populateForm();await store();await RelayWorkflowStore.remove('deliveryRestoreJournal');}
+    catch(error){await recoverRestoreJournal();await extras.load();await workflows.load();await delivery?.desk?.reload();await loadSaved();populateForm();render();throw Error('恢复未完成，已还原原有记录：'+error.message);}
   }});
+  await delivery?.ready;
   let savedLayout;
   try {savedLayout=isExtension ? (await chrome.storage.local.get('relayLayout')).relayLayout : JSON.parse(localStorage.getItem('aiRelayLayout'));} catch {}
   layout=RelayLayout.init(savedLayout, value => {
@@ -444,7 +446,7 @@ async function initialize() {
     // Queue for ownership: when an older window closes this one must recover.
     (async()=>{if(globalThis.RelayNative)await RelayNative.acquire();return navigator.locks.request('ai-relay-runner', async () => {
       // Re-read after acquisition, never resume using a stale waiting-window copy.
-      await recoverRestoreJournal();await extras?.load(); await loadSaved(); await workflows?.load().catch(e=>message('流程资料暂未读取：'+e.message,true)); lockedElsewhere = false; checkingOwner=false;clearTimeout(ownerNoticeTimer);transient = null;
+      await recoverRestoreJournal();await extras?.load(); await loadSaved(); await workflows?.load().catch(e=>message('流程资料暂未读取：'+e.message,true)); await delivery?.desk?.reload();lockedElsewhere = false; checkingOwner=false;clearTimeout(ownerNoticeTimer);transient = null;
       await pruneFiles().catch(e=>message('附件缓存整理未完成：'+e.message,true));
       populateForm(); render(); extras?.renderAPI();await extras?.changed();
       setInterval(async () => {try {await extras?.pump();await engine.tick(); render();} catch(e) {message(e.message, true);}}, 1500);
@@ -458,6 +460,7 @@ async function recoverRestoreJournal() {
   if(isExtension)await chrome.storage.local.set({relay:journal.relay||null,relayWorkspace:journal.workspace});
   else {localStorage.setItem('aiRelayPreview',JSON.stringify(journal.relay||null));localStorage.setItem('relayWorkspace',JSON.stringify(journal.workspace));}
   await RelayWorkflowStore.put('workspace',journal.materials);
+  if(journal.deliverables){if(isExtension)await chrome.storage.local.set({relayDeliverables:journal.deliverables});else localStorage.setItem('relayDeliverables',JSON.stringify(journal.deliverables));}
   await RelayWorkflowStore.remove('deliveryRestoreJournal');
 }
 initialize().catch(e => message('初始化失败：' + e.message, true));

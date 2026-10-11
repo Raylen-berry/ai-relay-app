@@ -8,11 +8,11 @@ Relay brings material preparation, model execution and result checking into one 
 
 It works with signed-in DeepSeek, ChatGPT and Kimi websites. DeepSeek and compatible Chat Completions text APIs are optional. Normal use does not require Node or Python.
 
-Current version: **0.8.2 beta**, for Chrome and Edge on Windows.
+Current version: **0.9.0 beta**, for Chrome and Edge on Windows.
 
 ## Install
 
-1. [Download the Windows package](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.8.2/AI-Relay-0.8.2-Windows.zip) and extract it completely.
+1. [Download the Windows package](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.9.0/AI-Relay-0.9.0-Windows.zip) and extract it completely.
 2. Run `安装到本机.cmd`. It installs to `%LOCALAPPDATA%\Programs\AI-Relay` and creates desktop and Start menu shortcuts.
 3. Open the desktop shortcut to start the local workspace. Materials, history and optional APIs work without the extension.
 4. For website models, enable Developer mode at `chrome://extensions/` or `edge://extensions/`, load the **installed extension folder**, and sign in to the models in that profile. Keep Developer mode enabled while using the unpacked extension.
@@ -24,9 +24,9 @@ The first extension load is manual. Keep the installation folder in place. Curre
 ## Run a task
 
 1. Enter a question, or prepare a data analysis, research report or document question.
-2. Describe the purpose, output format and acceptance conditions. Enter one condition per line, up to 12 conditions of 500 characters each.
+2. Expand “任务要求与运行设置” (Task requirements and execution settings) to describe the purpose, output format and acceptance conditions. Enter one condition per line, up to 12 conditions of 500 characters each.
 3. Choose an execution mode and models, then start the task. Material preparation does not call a model.
-4. Review the result, check numbers and evidence, and export the deliverable.
+4. Send the result to Delivery, check numbers and evidence, and export the deliverable.
 
 The three material workflows default to one model execution. Independent checking and the existing review routes remain available.
 
@@ -37,6 +37,16 @@ The three material workflows default to one model execution. Independent checkin
 | Review the draft | Models inspect the draft along a custom 3–9 turn route beginning and ending with model 1 |
 
 Models can make the same mistake. Generated results and completed manual checks have separate states. Matching citation IDs, checked sources and model agreement never automatically approve a conclusion.
+
+## Standalone delivery
+
+Open **成果交付** (Delivery) at the top to receive the current result, choose a completed result from history, or paste text into a new artifact. UTF-8 TXT and Markdown files can also be imported. Receiving a result creates a separate copy; the original task and any running task remain unchanged.
+
+Set the purpose, output format and acceptance criteria, then check each item. Citations such as [S1:P1] refer to saved excerpts; you can add excerpts manually. Each decision belongs to a specific statement and its evidence. Changing the body, evidence or criteria clears previous decisions. A reliable source does not automatically establish the conclusion.
+
+Export the body, excerpts and review record as Markdown, Word or PDF, or back up the artifact library. Importing a library adds new copies without overwriting existing artifacts and clears imported decisions. Complete work packages include the library; older packages without one leave the current library intact.
+
+Delivery makes no model requests and works without the web extension. Limits: 50 artifacts, five million characters in total, 300,000 body characters per artifact, 1 MB per UTF-8 text file, and 850 characters per excerpt. Reaching a limit prompts you to manage old records; none are silently removed.
 
 ## Material workflows
 
@@ -70,7 +80,7 @@ Limits: 10 MB and 200,000 characters per document, 200 PDF pages, 50 documents a
 
 Export Markdown, Word or PDF with excerpts, acceptance conditions, manual decisions, retrieval scope and execution limits. The task library includes started tasks that have not yet received an answer, retains up to 100 records, and supports search, tags and export. Loading a question never sends it. Original attachments must be selected again.
 
-A complete work package contains tasks, queued items, document text and tables for restoration in another browser. The whole input is validated before replacement. If a cross-store restore is interrupted, the next owning workbench rolls back to the records before restoration. Importing never starts model calls or the queue. Attachment jobs wait for files to be selected again; missing API connections require configuration.
+A complete work package contains tasks, queued items, document text, tables and the artifact library for restoration in another browser. The whole input is validated before replacement. If a cross-store restore is interrupted, the next owning workbench rolls back to the records before restoration. Importing never starts model calls or the queue. Attachment jobs wait for files to be selected again; missing API connections require configuration.
 
 Packages exclude configured API keys, live sessions and original attachment files, but may contain private document text. Download and store them carefully. Runtime records are written automatically to the installation’s `data` folder independently of the browser profile. Downloaded packages provide a separate backup for moving computers. Website models still need the extension and fresh logins.
 
