@@ -12,7 +12,7 @@
 
 ## 使用教程
 
-[看 2 分 08 秒视频](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.9.0/AI-Relay-Quick-Start.mp4) · [下载离线网页教程](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.9.0/AI-Relay-Web-Tutorial.zip)
+[看 2 分 08 秒视频](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.9.0/AI-Relay-Quick-Start-v2.mp4) · [下载离线网页教程](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.9.0/AI-Relay-Web-Tutorial-v2.zip)
 
 从输入问题、设置互审，到核对成果和导出。视频有中文旁白和字幕；网页解压后打开 `index.html`，可暂停、跳章和调整速度。示例使用模拟订单，生成过程已快进。
 

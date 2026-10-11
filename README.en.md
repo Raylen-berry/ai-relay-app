@@ -12,7 +12,7 @@ Current version: **0.9.0 beta**, for Chrome and Edge on Windows.
 
 ## Quick tutorial
 
-[Watch the 2:08 video](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.9.0/AI-Relay-Quick-Start.mp4) · [Download the offline web tutorial](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.9.0/AI-Relay-Web-Tutorial.zip)
+[Watch the 2:08 video](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.9.0/AI-Relay-Quick-Start-v2.mp4) · [Download the offline web tutorial](https://github.com/Raylen-berry/ai-relay-app/releases/download/v0.9.0/AI-Relay-Web-Tutorial-v2.zip)
 
 Follow a task from input and model review through evidence checks and export. Narration and captions are in Chinese. Extract the web tutorial and open `index.html` to pause, jump between chapters or change speed. The example uses a simulated order and skips generation delays.
 

@@ -5,7 +5,7 @@ window.RelayLesson={
     {
       "title": "认识入口",
       "duration": 10,
-      "voice": "先认识两个入口。任务工作台处理问题，成果交付负责核对和导出。",
+      "voice": "打开工作台，上面有两个入口：任务用来跑互审，成果交付用来核对和导出。",
       "captions": [
         [
           0,
@@ -17,12 +17,12 @@ window.RelayLesson={
         ]
       ],
       "start": 0,
-      "spokenSeconds": 7.523
+      "spokenSeconds": 7.584807256235828
     },
     {
       "title": "输入问题",
       "duration": 14,
-      "voice": "在问题框里写清任务和材料。这里用一份模拟订单，请模型列出算式并核对金额。",
+      "voice": "先把问题和材料放进来。这次用一份模拟订单，让模型算清楚，最后该付多少钱。",
       "captions": [
         [
           0,
@@ -34,12 +34,12 @@ window.RelayLesson={
         ]
       ],
       "start": 10,
-      "spokenSeconds": 8.611
+      "spokenSeconds": 8.184807256235828
     },
     {
       "title": "选模型与顺序",
       "duration": 16,
-      "voice": "选择 DeepSeek 和 ChatGPT。顺序一、二、一，表示起草、审核，再定稿。网页模型需要先登录，并加载扩展。",
+      "voice": "选 DeepSeek 和 ChatGPT，顺序设成一、二、一。也就是起草、审核、定稿。第一次用，先加载扩展并登录。",
       "captions": [
         [
           0,
@@ -55,12 +55,12 @@ window.RelayLesson={
         ]
       ],
       "start": 24,
-      "spokenSeconds": 12.918
+      "spokenSeconds": 11.68875283446712
     },
     {
       "title": "写验收条件",
       "duration": 14,
-      "voice": "展开任务要求，写验收条件，一行一项。条件要能检查，例如金额正确，包含运费和优惠。",
+      "voice": "打开任务要求，写几条能检查的条件。比如，运费和优惠有没有算进去，最后金额对不对。一行写一条。",
       "captions": [
         [
           0,
@@ -72,12 +72,12 @@ window.RelayLesson={
         ]
       ],
       "start": 40,
-      "spokenSeconds": 10.225
+      "spokenSeconds": 10.440816326530612
     },
     {
       "title": "开始互审",
       "duration": 18,
-      "voice": "点击开始互审，等待各轮完成。演示略过等待时间。等待完成前，保持工作台和任务网页打开。",
+      "voice": "点开始互审，等它跑完。这段把等待时间快进了。实际运行时，工作台和模型网页都要保持打开。",
       "captions": [
         [
           0,
@@ -93,12 +93,12 @@ window.RelayLesson={
         ]
       ],
       "start": 54,
-      "spokenSeconds": 10.81
+      "spokenSeconds": 10.176780045351475
     },
     {
       "title": "接收成果",
       "duration": 16,
-      "voice": "完成后，点送到成果交付。这里保存独立副本，也能新建后粘贴正文，或导入已有文本。",
+      "voice": "结果出来以后，点送到成果交付。这里会存一个副本。已有的文章或报告，也能直接粘贴进来，或者导入文本文件。",
       "captions": [
         [
           0,
@@ -114,12 +114,12 @@ window.RelayLesson={
         ]
       ],
       "start": 72,
-      "spokenSeconds": 9.616
+      "spokenSeconds": 11.112789115646258
     },
     {
       "title": "逐项核对",
       "duration": 26,
-      "voice": "引用没有对应原文时，先在原文依据里补入。再逐项检查验收条件，对照原文判断这句话是否成立。修改正文、依据或条件后，旧核对状态会清除。",
+      "voice": "先看引用有没有对应的原文。没有的话，就在原文依据里补上。接着，一项一项检查验收条件，再对照原文，判断这句话有没有依据。以后改了正文、原文或条件，这些勾选要重新核对。",
       "captions": [
         [
           0,
@@ -139,12 +139,12 @@ window.RelayLesson={
         ]
       ],
       "start": 88,
-      "spokenSeconds": 15.782
+      "spokenSeconds": 18.07278911564626
     },
     {
       "title": "导出与备份",
       "duration": 14,
-      "voice": "核对后，导出 Word 或 PDF。备份成果库可以保留正文和记录。导入副本时，旧判断不沿用，需要重新核对。",
+      "voice": "核对完，导出 Word 或 PDF。也可以备份成果库，留住正文和记录。备份导入后，需要重新核对。",
       "captions": [
         [
           0,
@@ -156,8 +156,13 @@ window.RelayLesson={
         ]
       ],
       "start": 114,
-      "spokenSeconds": 11.992
+      "spokenSeconds": 10.224807256235827
     }
   ],
-  "duration": 128
+  "duration": 128,
+  "narration": {
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "engine": "Microsoft Edge neural TTS",
+    "rate": "+0%"
+  }
 };
