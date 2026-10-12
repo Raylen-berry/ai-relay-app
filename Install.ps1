@@ -51,7 +51,7 @@ if (Test-Path -LiteralPath $relayDestination) {
     if ($oldRelay.key -ne $newRelay.key) { throw '目标目录不是此应用的既有安装。' }
 }
 New-Item -ItemType Directory -Path $relayDestination -Force | Out-Null
-foreach ($relayItem in @('extension','assets','AI互审启动助手.exe','AI互审本机核心.exe','extension-id.txt','开始使用.html','README.md','README.en.md','更新记录.md','验证记录.md','三项流程试用指南.md','0.8.0-交付与核对说明.md','成果交付使用说明.md','示例资料','换机安装.md','Install.ps1','安装到本机.cmd')) {
+foreach ($relayItem in @('extension','docs','assets','AI互审启动助手.exe','AI互审本机核心.exe','extension-id.txt','开始使用.html','README.md','README.en.md','更新记录.md','示例资料','Install.ps1','安装到本机.cmd')) {
     if ([IO.Path]::GetFullPath($relaySource).TrimEnd('\') -ne $relayDestination.TrimEnd('\')) {
         Copy-Item -LiteralPath (Join-Path $relaySource $relayItem) -Destination $relayDestination -Recurse -Force
     }
